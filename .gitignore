@@ -2,6 +2,7 @@ node_modules/
 .npm-cache/
 .cargo-home/
 .rustup-home/
+rustup-init.exe
 dist/
 coverage/
 playwright-report/
