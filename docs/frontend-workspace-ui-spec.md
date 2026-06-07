@@ -99,6 +99,8 @@ saved: 展示最近保存时间
 save-failed: 保存失败，可重试
 ```
 
+快速切换面板是当前工作区的高频入口。用户通过配置的快捷键打开面板后，前端展示一个轻量搜索浮层，默认搜索当前工作区内的软件标签、软件卡片、别名、用途备注和最近窗口标题。结果项需要明确显示动作类型：切换窗口、重新打开、添加并打开。`Ctrl+O` 可以作为 Windows 第一版默认候选快捷键，但设置页必须允许修改，避免与常见软件的“打开文件”冲突。
+
 中间区域可以有“最近窗口截图”或“当前软件预览”的卡片，但文案必须使用“最近截图”“窗口预览”“概览”这类词，不能使用“嵌入运行”“内置浏览器”“在此操作外部软件”等表述。点击预览卡片的行为是调用聚焦窗口命令，而不是在 WebView 内操作外部软件。
 
 ## 5. 软件标签和软件卡片
@@ -196,11 +198,16 @@ useWorkspaceAppStore:
   installedApps
   workspaceAppsByWorkspaceId
   appDialogOpen
+  quickSwitchOpen
   appSearchQuery
+  quickSwitchQuery
   launchingAppIds
   loadWorkspaceApps()
   openAddAppDialog()
+  openQuickSwitch()
+  closeQuickSwitch()
   searchInstalledApps()
+  searchQuickSwitchTargets()
   addAndLaunchApp()
   focusWorkspaceApp()
   removeWorkspaceApp()
@@ -272,6 +279,8 @@ get_whiteboard_summary
 list_activity_entries
 create_activity_entry
 save_canvas_snapshot
+get_shortcut_settings
+update_shortcut_settings
 ```
 
 命名映射可以在 API 层处理，React 代码里使用 camelCase 方法名，Rust command 保持 snake_case。前端类型字段使用 camelCase，因为 Rust DTO 应通过 serde 序列化为 camelCase，避免组件层做额外转换。
@@ -303,6 +312,9 @@ WorkspaceAppCard:
 
 WhiteboardPanel:
   展示白板摘要、打开白板入口和操作记录时间线。
+
+QuickSwitchPalette:
+  展示快捷键唤起的当前工作区软件搜索结果，支持键盘上下选择、Enter 执行动作、Esc 关闭。
 ```
 
 导出的类型放在 `src/lib/types.ts` 或 feature 局部 `types.ts`。跨 feature 共享类型必须稳定，不要让 React Flow 节点类型、Radix 弹窗内部状态、CSS 类名进入后端 DTO。
@@ -340,6 +352,9 @@ WhiteboardPanel:
 
 9. 数据隔离：
    在工作区 A 添加软件和白板卡片 -> 切换到工作区 B -> 工作区 B 不显示 A 的软件和白板摘要。
+
+10. 快速切换：
+   触发快捷键或测试按钮 -> 快速切换面板打开 -> 输入软件名或别名 -> 选择结果 -> 已运行软件调用 focusWorkspaceApp，窗口已关闭结果展示重新打开，未加入软件调用 addAndLaunchApp。
 ```
 
 关键元素需要稳定测试 ID：
@@ -362,6 +377,9 @@ whiteboard-panel
 open-whiteboard-button
 create-markdown-card-button
 save-status
+quick-switch-palette
+quick-switch-input
+quick-switch-result-{targetId}
 ```
 
 ## 12. MVP 验收边界

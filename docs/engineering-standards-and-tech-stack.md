@@ -38,6 +38,8 @@ UI 与样式建议使用：`tailwindcss`、`@tailwindcss/vite`、`shadcn/ui` 生
 
 Tauri 插件建议使用：`tauri-plugin-dialog`、`tauri-plugin-opener`、`tauri-plugin-global-shortcut`、`tauri-plugin-window-state`、`tauri-plugin-single-instance`、`tauri-plugin-clipboard-manager`。其中 opener 适合打开文件和 URL，不适合作为任意软件启动的唯一方案；任意 exe/快捷方式启动应由 Rust 平台适配层封装。
 
+快速切换面板需要使用 `tauri-plugin-global-shortcut` 或等价平台能力注册快捷键。`Ctrl+O` 可以作为 Windows 第一版默认候选值，但不能硬编码为唯一快捷键，因为它和大量软件的“打开文件”冲突。快捷键配置需要保存到本地设置中，前端只处理面板展示和搜索结果，快捷键注册、冲突失败和平台差异由 Rust/Tauri 后端处理。
+
 Rust 核心库建议使用：`serde`、`serde_json`、`thiserror`、`anyhow`、`tracing`、`tracing-subscriber`、`uuid`、`chrono`、`rusqlite`、`refinery`、`windows`、`winreg`、`dirs` 或 `directories`。
 
 测试工具建议使用：前端单元测试用 Vitest，端到端 UI 测试用 Playwright。Tauri 官方也提供 WebDriver 测试路径，但官方文档明确桌面 WebDriver 目前只支持 Windows 和 Linux，macOS 由于没有 WKWebView driver tool 不支持，所以第一版可以用 Playwright 测 Web 前端，用 Tauri WebDriver 或人工脚本补 Windows 桌面集成测试。
