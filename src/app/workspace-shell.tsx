@@ -13,6 +13,7 @@ import { WhiteboardPanel } from '@/features/canvas/components/whiteboard-panel';
 import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import { settingsApi } from '@/features/api/settings-api';
 import { toAppApiError } from '@/features/api/tauri-client';
+import { QuickSwitchOpenButton, QuickSwitchPanel, useQuickSwitchBridge } from '@/features/quick-switch';
 import { SettingsDialog } from '@/features/settings/components/settings-dialog';
 import { CreateWorkspaceDialog } from '@/features/workspaces/components/create-workspace-dialog';
 import { DeleteWorkspaceDialog } from '@/features/workspaces/components/delete-workspace-dialog';
@@ -29,6 +30,7 @@ function settingsCommandErrorMessage(error: unknown): string {
 }
 
 export function WorkspaceShell() {
+  useQuickSwitchBridge();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const selectedWorkspaceId = useWorkspaceStore((state) => state.selectedWorkspaceId);
   const workspaceLoading = useWorkspaceStore((state) => state.workspaceLoading);
@@ -236,21 +238,36 @@ export function WorkspaceShell() {
         ) : null}
 
         {workspaceLoading && workspaces.length === 0 ? (
-          <p className="text-muted-foreground">正在加载工作区…</p>
+          <>
+            <div className="flex justify-end">
+              <QuickSwitchOpenButton />
+            </div>
+            <p className="text-muted-foreground">正在加载工作区…</p>
+          </>
         ) : !selectedWorkspace ? (
-          <EmptyWorkspacesState onCreate={openCreateDialog} />
+          <>
+            <div className="flex justify-end">
+              <QuickSwitchOpenButton />
+            </div>
+            <EmptyWorkspacesState onCreate={openCreateDialog} />
+          </>
         ) : (
           <>
-            <CurrentWorkspaceHeader
-              workspace={selectedWorkspace}
-              contentQuery={contentQuery}
-              onContentQueryChange={setContentQuery}
-              onAddApp={handleAddApp}
-              onSettings={() => void handleOpenSettings()}
-              saveStatus={saveStatus}
-              lastSavedAt={lastSavedAt}
-              onRetrySave={() => void retrySave()}
-            />
+            <div className="flex flex-wrap items-center gap-3.5 border-b border-border pb-[18px]">
+              <div className="min-w-0 flex-1 [&_header]:border-b-0 [&_header]:pb-0">
+                <CurrentWorkspaceHeader
+                  workspace={selectedWorkspace}
+                  contentQuery={contentQuery}
+                  onContentQueryChange={setContentQuery}
+                  onAddApp={handleAddApp}
+                  onSettings={() => void handleOpenSettings()}
+                  saveStatus={saveStatus}
+                  lastSavedAt={lastSavedAt}
+                  onRetrySave={() => void retrySave()}
+                />
+              </div>
+              <QuickSwitchOpenButton />
+            </div>
             <WorkspaceAppTabs apps={visibleApps} onActivate={(app) => void activateWorkspaceApp(app)} onAddApp={handleAddApp} />
             <WorkspaceOverview
               workspace={selectedWorkspace}
@@ -335,6 +352,8 @@ export function WorkspaceShell() {
         }}
         onConfirm={handleDeleted}
       />
+
+      <QuickSwitchPanel />
 
       <AddAppDialog
         open={appDialogOpen}

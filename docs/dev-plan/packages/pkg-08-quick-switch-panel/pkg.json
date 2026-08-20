@@ -2,7 +2,7 @@
   "id": "pkg-08-quick-switch-panel",
   "seq": 8,
   "title": "快速切换面板",
-  "status": "pending",
+  "status": "completed",
   "dependsOn": [
     "pkg-07-settings-and-shortcut"
   ],
@@ -67,31 +67,31 @@
     {
       "id": "s08-01",
       "title": "实现 quick-switch store 与结果模型",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "结果含 action：focus / reopen / addAndLaunch；不把平台 id 暴露给 UI。"
     },
     {
       "id": "s08-02",
       "title": "实现搜索浮层与键盘操作",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "打开后焦点在输入框；上下选择；Enter 执行；Esc 关闭。"
     },
     {
       "id": "s08-03",
       "title": "接到现有启动/聚焦/添加",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "三种动作只复用现有 store/API，不新写一套启动逻辑。"
     },
     {
       "id": "s08-04",
       "title": "监听快捷键事件与测试入口",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "收到 quick-switch:open 打开面板；测试可用 hook 或按钮打开。"
     },
     {
       "id": "s08-05",
       "title": "补 Vitest",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "名称/别名/备注/标题过滤和三种动作有测试。"
     }
   ],

@@ -15,6 +15,7 @@ declare global {
       contentBase64: string,
       mimeType?: string,
     ) => Promise<unknown>;
+    __E2E_OPEN_QUICK_SWITCH__?: () => void;
   }
 }
 

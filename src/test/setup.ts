@@ -2,6 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
+import { useQuickSwitchStore } from '@/features/quick-switch/store/quick-switch-store';
+
 class NoopObserver {
   observe() {}
   unobserve() {}
@@ -20,4 +22,5 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
 
 afterEach(() => {
   cleanup();
+  useQuickSwitchStore.getState().reset();
 });

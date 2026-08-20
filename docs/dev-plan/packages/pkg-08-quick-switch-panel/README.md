@@ -1,6 +1,6 @@
 # pkg-08 快速切换面板
 
-状态：pending  
+状态：completed  
 依赖：pkg-07
 
 ## 目标
@@ -26,9 +26,17 @@
 ## 交付内容
 
 1. 浮层：搜索框、结果列表、动作标签（切换窗口 / 重新打开 / 添加并打开）。
-2. 默认先出当前工作区软件，再补未加入的软件库结果。
+2. 默认先出当前工作区软件，再补未加入的软件库结果（未加入项最多 20 条）。
 3. 匹配名称、别名、用途备注、最近窗口标题。字段已有即可，本包不提供编辑入口。
 4. Vitest 覆盖过滤和三种动作。系统热键留给 pkg-09 人工验。
+
+## 实现说明
+
+- 纯函数 `buildQuickSwitchResults` 产出 `focus` / `reopen` / `addAndLaunch`，不把原生窗口 id 传给 UI。
+- `useQuickSwitchStore` 只保存 `open` / `query` / `selectedIndex`，不 persist。
+- Enter 只调用现有 `activateWorkspaceApp` / `reopenWorkspaceApp` / `addAndLaunchApp`。
+- 打开方式：Rust 事件 `quick-switch:open`、`window.__E2E_OPEN_QUICK_SWITCH__`、顶栏「快速切换」按钮（`quick-switch-open-button`）。
+- 无工作区时面板展示空状态，不抛错。本包未新增 Rust command。
 
 ## 子任务
 
