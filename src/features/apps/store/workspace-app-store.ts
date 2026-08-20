@@ -87,9 +87,10 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
 
   async loadWorkspaceApps(workspaceId) {
     const seq = ++workspaceAppsRequestSeq;
+    const sameWorkspace = get().currentWorkspaceId === workspaceId;
     set({
       currentWorkspaceId: workspaceId,
-      workspaceApps: [],
+      workspaceApps: sameWorkspace ? get().workspaceApps : [],
       workspaceAppsLoading: true,
       appError: null,
     });
@@ -199,11 +200,34 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
       return launched;
     } catch (error) {
       const appError = toCommandError(error);
+      const workspaceApps = get().workspaceApps.map((app) =>
+        app.installedAppId === installedAppId
+          ? { ...app, status: statusFromErrorCode(appError.code), errorMessage: appError.message }
+          : app,
+      );
       set({
         launchingInstalledAppIds: withoutId(get().launchingInstalledAppIds, installedAppId),
         appError,
+        workspaceApps,
+        workspaceAppsByWorkspaceId: {
+          ...get().workspaceAppsByWorkspaceId,
+          [workspaceId]: workspaceApps,
+        },
       });
-      await get().loadWorkspaceApps(workspaceId);
+      try {
+        const refreshed = await appApi.listWorkspaceApps({ workspaceId });
+        if (get().currentWorkspaceId === workspaceId) {
+          set({
+            workspaceApps: refreshed,
+            workspaceAppsByWorkspaceId: {
+              ...get().workspaceAppsByWorkspaceId,
+              [workspaceId]: refreshed,
+            },
+          });
+        }
+      } catch {
+        // Keep the local card list; the banner already shows the launch error.
+      }
       return null;
     }
   },

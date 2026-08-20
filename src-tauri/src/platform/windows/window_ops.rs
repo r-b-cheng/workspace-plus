@@ -89,8 +89,10 @@ unsafe fn is_candidate_window(hwnd: HWND) -> bool {
     if !IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() {
         return false;
     }
-    if GetWindow(hwnd, GW_OWNER).is_ok() {
-        return false;
+    if let Ok(owner) = GetWindow(hwnd, GW_OWNER) {
+        if !owner.0.is_null() {
+            return false;
+        }
     }
     let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     if ex_style & WS_EX_TOOLWINDOW.0 as isize != 0 {

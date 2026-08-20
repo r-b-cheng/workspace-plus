@@ -1,8 +1,20 @@
 //! Thin Tauri commands. Business rules belong in `services`.
 
+use crate::errors::AppError;
+
 pub mod apps;
 pub mod canvas;
 pub mod workspaces;
+
+async fn run_blocking<T, F>(work: F) -> Result<T, AppError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|err| AppError::internal(err.to_string()))?
+}
 
 pub use apps::{
     add_manual_app, focus_workspace_app, launch_workspace_app, list_installed_apps,

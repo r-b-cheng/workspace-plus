@@ -22,22 +22,23 @@ const ERROR_COPY: Record<string, string> = {
   [ERROR_CODES.INVALID_TARGET]: '路径无效或目标不存在。',
   [ERROR_CODES.FOCUS_DENIED]: '系统拒绝聚焦该窗口。',
   [ERROR_CODES.PERMISSION_DENIED]: '权限不足，无法完成操作。',
-  [ERROR_CODES.LAUNCH_FAILED]: '软件启动失败。',
+  [ERROR_CODES.LAUNCH_FAILED]: '软件启动失败。若它其实已经打开，点卡片即可切换窗口。',
   [ERROR_CODES.UNSUPPORTED_PLATFORM]: '当前平台暂不支持该操作。',
-  [ERROR_CODES.TIMEOUT]: '操作超时，请重试。',
+  [ERROR_CODES.TIMEOUT]: '等待窗口超时。软件可能已经打开，点卡片试试。',
   [ERROR_CODES.VALIDATION]: '输入不完整或格式不正确。',
   [ERROR_CODES.INSTALLED_APP_UNAVAILABLE]: '该软件当前不可用。',
   [ERROR_CODES.INTERNAL]: '操作失败，请重试。',
 };
 
 export function userMessageForError(error: CommandError): string {
-  if (error.code === ERROR_CODES.WINDOW_CLOSED) {
-    return ERROR_COPY[ERROR_CODES.WINDOW_CLOSED];
+  const mapped = ERROR_COPY[error.code];
+  if (mapped) {
+    return mapped;
   }
   if (error.message.trim()) {
     return error.message;
   }
-  return ERROR_COPY[error.code] ?? ERROR_COPY[ERROR_CODES.INTERNAL];
+  return ERROR_COPY[ERROR_CODES.INTERNAL];
 }
 
 export function isWindowClosedError(error: Pick<CommandError, 'code'>): boolean {

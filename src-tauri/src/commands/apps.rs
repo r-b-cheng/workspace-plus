@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::domain::{InstalledApp, RemoveWorkspaceAppResult, WorkspaceApp};
 use crate::errors::AppError;
@@ -33,8 +33,8 @@ pub fn search_installed_apps(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn refresh_installed_apps(state: State<AppService>) -> Result<Vec<InstalledApp>, AppError> {
-    state.refresh_installed_apps()
+pub async fn refresh_installed_apps(handle: AppHandle) -> Result<Vec<InstalledApp>, AppError> {
+    super::run_blocking(move || handle.state::<AppService>().refresh_installed_apps()).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -50,8 +50,8 @@ pub fn add_manual_app(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn launch_workspace_app(
-    state: State<AppService>,
+pub async fn launch_workspace_app(
+    handle: AppHandle,
     workspace_id: String,
     installed_app_id: String,
 ) -> Result<WorkspaceApp, AppError> {
@@ -61,18 +61,28 @@ pub fn launch_workspace_app(
     if installed_app_id.trim().is_empty() {
         return Err(AppError::validation("installedAppId is required"));
     }
-    state.launch_workspace_app(&workspace_id, &installed_app_id)
+    super::run_blocking(move || {
+        handle
+            .state::<AppService>()
+            .launch_workspace_app(&workspace_id, &installed_app_id)
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn focus_workspace_app(
-    state: State<AppService>,
+pub async fn focus_workspace_app(
+    handle: AppHandle,
     workspace_app_id: String,
 ) -> Result<WorkspaceApp, AppError> {
     if workspace_app_id.trim().is_empty() {
         return Err(AppError::validation("workspaceAppId is required"));
     }
-    state.focus_workspace_app(&workspace_app_id)
+    super::run_blocking(move || {
+        handle
+            .state::<AppService>()
+            .focus_workspace_app(&workspace_app_id)
+    })
+    .await
 }
 
 #[tauri::command(rename_all = "camelCase")]

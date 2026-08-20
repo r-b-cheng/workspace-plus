@@ -17,6 +17,9 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: false,
+    watch: {
+      ignored: ['**/src-tauri/**', '**/.cargo-home/**', '**/.rustup-home/**', '**/.cargo-target-*/**'],
+    },
   },
   test: {
     environment: 'jsdom',
