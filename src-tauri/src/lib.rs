@@ -7,6 +7,9 @@ pub mod storage;
 
 pub use errors::AppError;
 pub use platform::{MockPlatformAdapter, PlatformAdapter};
+
+#[cfg(windows)]
+pub use platform::WindowsPlatformAdapter;
 pub use services::AppService;
 
 use tauri::Manager;

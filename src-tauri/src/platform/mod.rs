@@ -1,11 +1,12 @@
 //! Operating-system capabilities. Product rules do not live here.
 //!
-//! `PlatformAdapter` is injectable so tests and the running app can use the
-//! mock implementation. The real Windows adapter is added in a later package.
+//! `PlatformAdapter` is injectable so tests can keep using the mock while the
+//! running app on Windows uses the native adapter.
 
 use serde::{Deserialize, Serialize};
 
 pub mod mock;
+pub mod rules;
 
 #[cfg(target_os = "macos")]
 pub mod macos;
@@ -14,6 +15,9 @@ pub mod macos;
 pub mod windows;
 
 pub use mock::MockPlatformAdapter;
+
+#[cfg(windows)]
+pub use windows::WindowsPlatformAdapter;
 
 /// Cross-platform adapter for scan, launch, window list, focus, and manual targets.
 pub trait PlatformAdapter: Send + Sync {
@@ -37,9 +41,16 @@ pub trait PlatformAdapter: Send + Sync {
     ) -> Result<ResolvedManualAppTarget, PlatformError>;
 }
 
-/// Builds the default injectable adapter for this package (mock only).
+/// Builds the default adapter: Windows native on Windows, mock elsewhere.
 pub fn default_adapter() -> std::sync::Arc<dyn PlatformAdapter> {
-    std::sync::Arc::new(MockPlatformAdapter::new())
+    #[cfg(windows)]
+    {
+        std::sync::Arc::new(WindowsPlatformAdapter::new())
+    }
+    #[cfg(not(windows))]
+    {
+        std::sync::Arc::new(MockPlatformAdapter::new())
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -189,6 +200,10 @@ impl PlatformError {
         }
     }
 
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::new(PlatformErrorCode::NotFound, message)
+    }
+
     pub fn invalid_target(message: impl Into<String>) -> Self {
         Self::new(PlatformErrorCode::InvalidTarget, message)
     }
@@ -199,6 +214,18 @@ impl PlatformError {
 
     pub fn focus_denied(message: impl Into<String>) -> Self {
         Self::new(PlatformErrorCode::FocusDenied, message)
+    }
+
+    pub fn launch_failed(message: impl Into<String>) -> Self {
+        Self::new(PlatformErrorCode::LaunchFailed, message)
+    }
+
+    pub fn timeout(message: impl Into<String>) -> Self {
+        Self::new(PlatformErrorCode::Timeout, message)
+    }
+
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::new(PlatformErrorCode::Internal, message)
     }
 
     pub fn unsupported() -> Self {

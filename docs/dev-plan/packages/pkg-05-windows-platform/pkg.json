@@ -2,7 +2,7 @@
   "id": "pkg-05-windows-platform",
   "seq": 5,
   "title": "Windows 真实扫描、启动与窗口置前",
-  "status": "pending",
+  "status": "completed",
   "dependsOn": ["pkg-02-storage-and-commands"],
   "parallelWith": ["pkg-03-frontend-workspace", "pkg-04-whiteboard-canvas"],
   "ownerHint": "平台适配智能体",
@@ -66,37 +66,37 @@
     {
       "id": "s05-01",
       "title": "实现 Windows adapter 骨架并在装配时替换 mock",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "cfg(windows) 默认用 Windows adapter；测试仍可注入 mock。"
     },
     {
       "id": "s05-02",
       "title": "实现开始菜单快捷方式扫描与去重",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "能扫到记事本、浏览器等常见项；同启动目标不重复；不全盘深扫。"
     },
     {
       "id": "s05-03",
       "title": "实现启动与短时窗口匹配",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "启动成功可无窗口（托盘/复用进程）但不误报失败；超时有明确错误。"
     },
     {
       "id": "s05-04",
       "title": "实现枚举、校验、恢复、置前",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "句柄失效返回 WindowClosed；最小化可恢复；置前失败不假装成功。"
     },
     {
       "id": "s05-05",
       "title": "实现手动 exe/lnk 解析与图标读取",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "有效路径给出 displayName 和建议图标；无效路径结构化失败；图标失败不阻断添加。"
     },
     {
       "id": "s05-06",
       "title": "隔离 Windows 原生测试",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "默认 cargo test 不碰真实桌面；WINDOWS_NATIVE_TESTS=1 才跑原生用例。"
     }
   ],
