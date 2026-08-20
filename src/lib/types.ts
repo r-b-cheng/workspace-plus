@@ -238,3 +238,15 @@ export type LaunchWorkspaceAppInput = {
 export type WorkspaceAppIdInput = {
   workspaceAppId: string;
 };
+
+export type ShortcutRegistrationStatus = 'registered' | 'conflict' | 'denied' | 'unregistered';
+
+export type AppSettings = {
+  quickSwitchShortcut: string;
+  registrationStatus: ShortcutRegistrationStatus;
+  lastError?: string | null;
+};
+
+export type UpdateAppSettingsInput = {
+  quickSwitchShortcut?: string | null;
+};

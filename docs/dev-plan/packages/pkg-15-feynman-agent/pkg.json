@@ -1,0 +1,95 @@
+{
+  "id": "pkg-15-feynman-agent",
+  "seq": 15,
+  "title": "基于画布的费曼学习 Agent",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-14-ai-canvas-summary"
+  ],
+  "parallelWith": [],
+  "ownerHint": "白板 Canvas 智能体",
+  "goal": "根据画布材料生成追问、复述检查、概念拆解和知识缺口。输出是可撤销的建议卡片，不是替用户自动总结一切。",
+  "changeScope": {
+    "summary": "在 pkg-14 的上下文和 provider 上加费曼交互。默认手动触发，可选防抖，不读外部软件。",
+    "allowedPaths": [
+      "src/features/agent/**",
+      "src/features/canvas/**",
+      "src/features/settings/**",
+      "src/features/api/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/domain/**",
+      "src-tauri/src/storage/**",
+      "src-tauri/migrations/**",
+      "src/lib/types.ts",
+      "src/test/**"
+    ],
+    "forbiddenPaths": [
+      "src-tauri/src/platform/**"
+    ],
+    "allowedChanges": [
+      "创建 src/features/agent/",
+      "run_feynman_session：输入画布范围，输出提问/复述检查/反例/缺口",
+      "建议以可编辑卡片落回画布，用户可丢弃",
+      "手动触发为默认；防抖实时只分析选中节点或视口",
+      "每次调用的范围和结果对用户可见"
+    ],
+    "forbiddenChanges": [
+      "读取外部软件内部内容",
+      "每次击键都请求模型",
+      "自动覆盖用户原卡片",
+      "接入插件市场"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d15-session",
+      "name": "费曼会话",
+      "description": "一次运行产生追问和复述检查，而不是又一份摘要。"
+    },
+    {
+      "id": "d15-cards",
+      "name": "可撤销建议卡片",
+      "description": "结果进画布后仍是普通卡片，删掉即撤销。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s15-01",
+      "title": "提示词与响应结构",
+      "status": "pending",
+      "doneWhen": "输出分追问、复述、拆解、缺口，而不是一段 summary。"
+    },
+    {
+      "id": "s15-02",
+      "title": "手动会话 command",
+      "status": "pending",
+      "doneWhen": "可指定选中节点 / 视口 / 全画布。"
+    },
+    {
+      "id": "s15-03",
+      "title": "建议落盘为卡片",
+      "status": "pending",
+      "doneWhen": "卡片可编辑删除；不覆盖原文。"
+    },
+    {
+      "id": "s15-04",
+      "title": "可选防抖触发",
+      "status": "pending",
+      "doneWhen": "默认关；打开后只对选中或视口防抖，不每次输入都请求。"
+    }
+  ],
+  "commands": [
+    "run_feynman_session"
+  ],
+  "acceptance": [
+    "输入只来自画布",
+    "输出是学习交互，不是又一篇摘要",
+    "用户能删掉建议卡片",
+    "默认不自动请求"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-15-feynman-agent/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-15-feynman-agent/README.md"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "id": "pkg-16-device-sync",
+  "seq": 16,
+  "title": "工作区导出导入与本机同步准备",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-09-p0-acceptance"
+  ],
+  "parallelWith": [
+    "pkg-15-feynman-agent"
+  ],
+  "ownerHint": "数据与本地存储智能体",
+  "goal": "先做出可审查的工作区包导出/导入和冲突报告。不自建云账号，不在本包做实时多端同步。",
+  "changeScope": {
+    "summary": "导出当前工作区的软件关联、白板和资源引用；另一台机器可导入。冲突只报告，不自动合并业务对象。",
+    "allowedPaths": [
+      "src-tauri/src/commands/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/storage/**",
+      "src-tauri/src/domain/**",
+      "src-tauri/tests/**",
+      "src/features/workspaces/**",
+      "src/features/api/**",
+      "src/lib/types.ts",
+      "src/test/**"
+    ],
+    "forbiddenPaths": [
+      "src-tauri/src/platform/windows/window_ops.rs",
+      "src/features/agent/**"
+    ],
+    "allowedChanges": [
+      "export_workspace 打出本地包：元数据、软件关联、画布、assets 文件",
+      "import_workspace 生成新工作区或写入指定工作区",
+      "冲突清单：同名工作区、缺失启动路径、缺失图片",
+      "导出不含 LLM 密钥和全局快捷键以外的本机路径机密时需脱敏说明",
+      "导入不卸载、不关闭真实软件"
+    ],
+    "forbiddenChanges": [
+      "自建同步服务器或强制登录账号",
+      "CRDT 实时同步",
+      "多人同时编辑",
+      "把 HWND 或本机绝对密钥写进导出包"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d16-export",
+      "name": "工作区导出包",
+      "description": "一个工作区可打成本地文件，含白板资源和软件关联。"
+    },
+    {
+      "id": "d16-import",
+      "name": "导入与冲突报告",
+      "description": "导入后给出能打开和打不开的项，不假装软件一定存在。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s16-01",
+      "title": "导出格式",
+      "status": "pending",
+      "doneWhen": "格式有版本号；含工作区、软件关联、画布、资源。"
+    },
+    {
+      "id": "s16-02",
+      "title": "导入与隔离",
+      "status": "pending",
+      "doneWhen": "导入生成独立工作区，不覆盖未选择的本地数据。"
+    },
+    {
+      "id": "s16-03",
+      "title": "冲突与缺失路径",
+      "status": "pending",
+      "doneWhen": "另一台电脑没有对应 exe 时标不可用，允许稍后手动指定。"
+    },
+    {
+      "id": "s16-04",
+      "title": "测试",
+      "status": "pending",
+      "doneWhen": "导出再导入后白板和关联仍在；密钥不进包。"
+    }
+  ],
+  "commands": [
+    "export_workspace",
+    "import_workspace"
+  ],
+  "acceptance": [
+    "导出导入不经过自建云",
+    "导入不覆盖其他工作区",
+    "缺失软件只标不可用",
+    "包里没有密钥和 HWND"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-16-device-sync/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-16-device-sync/README.md"
+  }
+}

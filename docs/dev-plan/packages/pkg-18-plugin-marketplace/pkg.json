@@ -1,0 +1,98 @@
+{
+  "id": "pkg-18-plugin-marketplace",
+  "seq": 18,
+  "title": "本地插件清单与加载",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-09-p0-acceptance"
+  ],
+  "parallelWith": [
+    "pkg-16-device-sync"
+  ],
+  "ownerHint": "工程基础 / 主控",
+  "goal": "先做本机插件清单、权限声明和加载。不做在线商店、付费和远程安装。插件不能直接碰 HWND 或用户密钥。",
+  "changeScope": {
+    "summary": "定义 plugin manifest、本机目录扫描、显式启用。插件只能走白名单 command，不能自己扫盘或钩窗口。",
+    "allowedPaths": [
+      "src-tauri/src/plugins/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/domain/**",
+      "src-tauri/migrations/**",
+      "src/features/settings/**",
+      "src/features/api/**",
+      "src/lib/types.ts",
+      "src/test/**",
+      "docs/dev-plan/packages/pkg-18-plugin-marketplace/**"
+    ],
+    "forbiddenPaths": [
+      "src-tauri/src/platform/windows/window_ops.rs",
+      "src-tauri/src/platform/windows/app_launch.rs"
+    ],
+    "allowedChanges": [
+      "plugin.json：id、名称、版本、权限、入口",
+      "扫描本机 plugins 目录，默认全关",
+      "list_plugins / set_plugin_enabled",
+      "白名单能力：读当前工作区摘要、往画布加卡片、打开设置页",
+      "插件进程或脚本与主进程隔离，崩溃不影响主窗口"
+    ],
+    "forbiddenChanges": [
+      "在线市场、账号、付费、自动更新插件",
+      "插件直接调用 Win32 / Accessibility",
+      "插件读取 LLM 密钥",
+      "远程下载并执行未审查代码"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d18-manifest",
+      "name": "插件清单格式",
+      "description": "一个目录一个插件，有权限声明。"
+    },
+    {
+      "id": "d18-toggle",
+      "name": "本机启用开关",
+      "description": "设置里能看到插件，默认关闭，用户自己打开。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s18-01",
+      "title": "manifest 与目录约定",
+      "status": "pending",
+      "doneWhen": "文档写清目录、字段、权限枚举。"
+    },
+    {
+      "id": "s18-02",
+      "title": "扫描与启用",
+      "status": "pending",
+      "doneWhen": "坏 manifest 被跳过并记录；默认不启用。"
+    },
+    {
+      "id": "s18-03",
+      "title": "白名单调用",
+      "status": "pending",
+      "doneWhen": "插件只能打声明过的能力，越权失败。"
+    },
+    {
+      "id": "s18-04",
+      "title": "示例插件与测试",
+      "status": "pending",
+      "doneWhen": "仓库内有一个只往画布加卡片的示例；越权有测试。"
+    }
+  ],
+  "commands": [
+    "list_plugins",
+    "set_plugin_enabled"
+  ],
+  "acceptance": [
+    "没有在线商店",
+    "默认不加载任何插件",
+    "插件碰不到 HWND 和密钥",
+    "坏插件不能把主进程打挂"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-18-plugin-marketplace/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-18-plugin-marketplace/README.md"
+  }
+}

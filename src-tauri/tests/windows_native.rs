@@ -13,6 +13,7 @@ use workspace_hub_lib::platform::{
     FocusWindowRequest, LaunchAppRequest, ListWindowsRequest, PlatformAdapter,
     ResolveManualAppTargetRequest, ScanInstalledAppsRequest,
 };
+use workspace_hub_lib::platform::rules::{pick_best_matching_window, WindowMatchHint};
 use workspace_hub_lib::WindowsPlatformAdapter;
 
 fn native_enabled() -> bool {
@@ -97,6 +98,7 @@ fn native_scan_launch_and_focus() {
             display_name: "Notepad".into(),
             installed_app_id: None,
             workspace_id: None,
+            launch_args: None,
         })
         .expect("launch notepad");
     assert!(
@@ -140,4 +142,60 @@ fn native_manual_resolve_system_exe() {
         .expect("resolve notepad");
     assert_eq!(resolved.app_type, "native_app");
     assert_eq!(resolved.source, "manual");
+}
+
+#[test]
+fn native_focus_rediscovers_already_running_app() {
+    if !native_enabled() {
+        return;
+    }
+
+    let adapter = WindowsPlatformAdapter::new();
+    let windows = adapter
+        .list_windows(&ListWindowsRequest::default())
+        .expect("list windows");
+
+    let cc_exe = windows.iter().find_map(|window| {
+        let path = window.process_path.as_deref()?;
+        let lower = path.to_ascii_lowercase();
+        if lower.contains("cc-switch") || lower.contains("cc switch") {
+            Some(path.to_string())
+        } else {
+            None
+        }
+    });
+    let cc = pick_best_matching_window(
+        &windows,
+        &WindowMatchHint {
+            display_name: "CC Switch".into(),
+            executable_path: cc_exe,
+            ..WindowMatchHint::default()
+        },
+    );
+    let edge = pick_best_matching_window(
+        &windows,
+        &WindowMatchHint {
+            display_name: "Microsoft Edge".into(),
+            executable_path: Some(
+                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe".into(),
+            ),
+            ..WindowMatchHint::default()
+        },
+    );
+    let target = cc.or(edge).unwrap_or_else(|| {
+        panic!(
+            "did not find CC Switch or Edge among {:?}",
+            windows
+                .iter()
+                .map(|window| window.title.clone())
+                .collect::<Vec<_>>()
+        )
+    });
+
+    let focused = adapter
+        .focus_window(&FocusWindowRequest {
+            native_window_id: target.native_window_id.clone(),
+        })
+        .expect("focus rediscovered running window");
+    assert!(focused.focused || focused.restored);
 }

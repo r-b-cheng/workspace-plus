@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 
 use crate::platform::{
@@ -24,6 +24,7 @@ struct MockWindow {
 pub struct MockPlatformAdapter {
     windows: Mutex<HashMap<String, MockWindow>>,
     next_pid: AtomicU32,
+    omit_window_on_next_launch: AtomicBool,
 }
 
 impl MockPlatformAdapter {
@@ -31,7 +32,13 @@ impl MockPlatformAdapter {
         Self {
             windows: Mutex::new(HashMap::new()),
             next_pid: AtomicU32::new(10_000),
+            omit_window_on_next_launch: AtomicBool::new(false),
         }
+    }
+
+    /// Next launch reports success but does not create or bind a window.
+    pub fn omit_next_launch_window(&self) {
+        self.omit_window_on_next_launch.store(true, Ordering::Relaxed);
     }
 
     /// Marks a previously launched mock window as closed.
@@ -41,6 +48,24 @@ impl MockPlatformAdapter {
                 window.closed = true;
             }
         }
+    }
+
+    /// Opens a synthetic window without going through launch. Used to test rediscovery.
+    pub fn open_window(&self, title: &str, process_path: &str) -> String {
+        let process_id = self.next_pid.fetch_add(1, Ordering::Relaxed);
+        let native_window_id = format!("mock:{}", new_id());
+        if let Ok(mut windows) = self.windows.lock() {
+            windows.insert(
+                native_window_id.clone(),
+                MockWindow {
+                    title: title.to_string(),
+                    process_id,
+                    process_path: Some(process_path.to_string()),
+                    closed: false,
+                },
+            );
+        }
+        native_window_id
     }
 
     fn catalog() -> Vec<ScannedApp> {
@@ -156,8 +181,16 @@ impl PlatformAdapter for MockPlatformAdapter {
 
     fn launch_app(&self, request: &LaunchAppRequest) -> Result<LaunchResult, PlatformError> {
         let process_id = self.next_pid.fetch_add(1, Ordering::Relaxed);
-        let native_window_id = format!("mock:{}", new_id());
         let title = request.display_name.clone();
+        if self.omit_window_on_next_launch.swap(false, Ordering::Relaxed) {
+            return Ok(LaunchResult {
+                process_id: Some(process_id),
+                native_window_id: None,
+                title: None,
+                process_path: Some(request.launch_target.clone()),
+            });
+        }
+        let native_window_id = format!("mock:{}", new_id());
         let mut windows = self
             .windows
             .lock()

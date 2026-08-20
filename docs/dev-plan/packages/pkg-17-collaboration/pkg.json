@@ -1,0 +1,85 @@
+{
+  "id": "pkg-17-collaboration",
+  "seq": 17,
+  "title": "工作区只读分享与评论",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-16-device-sync"
+  ],
+  "parallelWith": [],
+  "ownerHint": "数据与本地存储智能体 / 前端工作区智能体",
+  "goal": "在导出包之上做最小协作：只读分享和画布评论。不做实时光标、权限系统和多人同时编辑。",
+  "changeScope": {
+    "summary": "导入的只读工作区可浏览软件列表和白板，可在节点上留本地评论。评论不写回对方机器，除非再次导出。",
+    "allowedPaths": [
+      "src-tauri/migrations/**",
+      "src-tauri/src/**",
+      "src/features/workspaces/**",
+      "src/features/canvas/**",
+      "src/features/api/**",
+      "src/lib/types.ts",
+      "src/test/**"
+    ],
+    "forbiddenPaths": [
+      "src-tauri/src/platform/windows/app_launch.rs"
+    ],
+    "allowedChanges": [
+      "工作区标记 sharedReadOnly",
+      "只读工作区禁止改软件关联和删除源卡片，允许本地评论",
+      "评论落在本地 SQLite",
+      "再次导出时可带上评论"
+    ],
+    "forbiddenChanges": [
+      "WebSocket 实时协作",
+      "在线账号与权限矩阵",
+      "同时编辑同一节点的 OT/CRDT",
+      "插件市场"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d17-readonly",
+      "name": "只读分享工作区",
+      "description": "导入后能看软件和白板，不能当自己的可写副本误改源语义。"
+    },
+    {
+      "id": "d17-comments",
+      "name": "本地评论",
+      "description": "可在卡片上留评论，再次导出时带走。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s17-01",
+      "title": "只读标记与 UI 禁用",
+      "status": "pending",
+      "doneWhen": "只读工作区不能删源卡片、不能移出对方软件关联。"
+    },
+    {
+      "id": "s17-02",
+      "title": "节点评论",
+      "status": "pending",
+      "doneWhen": "评论存本地，属于节点，不属于全局聊天。"
+    },
+    {
+      "id": "s17-03",
+      "title": "导出带走评论",
+      "status": "pending",
+      "doneWhen": "再导出的包含评论；对方导入看得到。"
+    }
+  ],
+  "commands": [
+    "list_canvas_comments",
+    "add_canvas_comment",
+    "delete_canvas_comment"
+  ],
+  "acceptance": [
+    "只读工作区改不了源白板节点",
+    "没有实时多人光标",
+    "评论只存在本地，除非再次导出"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-17-collaboration/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-17-collaboration/README.md"
+  }
+}

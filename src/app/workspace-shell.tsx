@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { PanelResizeHandle } from '@/app/panel-resize-handle';
+import { displayedLeftWidth } from '@/app/shell-layout';
+import { useShellLayout } from '@/app/use-shell-layout';
 import { AddAppDialog } from '@/features/apps/components/add-app-dialog';
 import { CurrentWorkspaceHeader } from '@/features/apps/components/current-workspace-header';
 import { filterWorkspaceApps, WorkspaceAppCardGrid } from '@/features/apps/components/workspace-app-card-grid';
@@ -8,13 +11,22 @@ import { WorkspaceOverview } from '@/features/apps/components/workspace-overview
 import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
 import { WhiteboardPanel } from '@/features/canvas/components/whiteboard-panel';
 import { useCanvasStore } from '@/features/canvas/store/canvas-store';
+import { settingsApi } from '@/features/api/settings-api';
+import { toAppApiError } from '@/features/api/tauri-client';
+import { SettingsDialog } from '@/features/settings/components/settings-dialog';
 import { CreateWorkspaceDialog } from '@/features/workspaces/components/create-workspace-dialog';
 import { DeleteWorkspaceDialog } from '@/features/workspaces/components/delete-workspace-dialog';
 import { EmptyWorkspacesState } from '@/features/workspaces/components/empty-workspaces-state';
 import { RenameWorkspaceDialog } from '@/features/workspaces/components/rename-workspace-dialog';
 import { WorkspaceSidebar } from '@/features/workspaces/components/workspace-sidebar';
 import { useWorkspaceStore } from '@/features/workspaces/store/workspace-store';
-import { isWindowClosedError } from '@/lib/errors';
+import { isWindowClosedError, userMessageForError } from '@/lib/errors';
+import type { AppSettings } from '@/lib/types';
+
+function settingsCommandErrorMessage(error: unknown): string {
+  const err = toAppApiError(error);
+  return err.message.trim() || userMessageForError(err);
+}
 
 export function WorkspaceShell() {
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -68,6 +80,12 @@ export function WorkspaceShell() {
   const retrySave = useCanvasStore((state) => state.retrySave);
 
   const [contentQuery, setContentQuery] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [settingsSubmitting, setSettingsSubmitting] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const { layout, toggleLeftCollapsed, beginResize, applyResize, endResize } = useShellLayout();
+  const leftWidth = displayedLeftWidth(layout);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -156,21 +174,55 @@ export function WorkspaceShell() {
     void openAddAppDialog(selectedWorkspaceId);
   }, [openAddAppDialog, selectedWorkspaceId]);
 
+  const handleOpenSettings = useCallback(async () => {
+    setSettingsOpen(true);
+    setSettingsError(null);
+    try {
+      const settings = await settingsApi.getAppSettings();
+      setAppSettings(settings);
+    } catch (error) {
+      setSettingsError(settingsCommandErrorMessage(error));
+    }
+  }, []);
+
+  const handleSaveSettings = useCallback(async (quickSwitchShortcut: string) => {
+    setSettingsSubmitting(true);
+    setSettingsError(null);
+    try {
+      const settings = await settingsApi.updateAppSettings({ quickSwitchShortcut });
+      setAppSettings(settings);
+    } catch (error) {
+      setSettingsError(settingsCommandErrorMessage(error));
+    } finally {
+      setSettingsSubmitting(false);
+    }
+  }, []);
+
   return (
-    <main
-      className="grid min-h-screen grid-cols-[292px_minmax(520px,1fr)_390px] bg-background text-foreground max-[1180px]:grid-cols-[260px_minmax(0,1fr)] max-[820px]:grid-cols-1"
-      data-testid="workspace-shell"
-    >
-      <WorkspaceSidebar
-        workspaces={workspaces}
-        selectedWorkspaceId={selectedWorkspaceId}
-        onCreate={openCreateDialog}
-        onSelect={(workspaceId) => void handleSelectWorkspace(workspaceId)}
-        onRename={openRenameDialog}
-        onDelete={openDeleteDialog}
+    <main className="flex min-h-screen bg-background text-foreground" data-testid="workspace-shell">
+      <div className="flex min-h-screen shrink-0 max-[820px]:hidden" style={{ width: leftWidth }}>
+        <WorkspaceSidebar
+          workspaces={workspaces}
+          selectedWorkspaceId={selectedWorkspaceId}
+          collapsed={layout.leftCollapsed}
+          onToggleCollapsed={toggleLeftCollapsed}
+          onCreate={openCreateDialog}
+          onSelect={(workspaceId) => void handleSelectWorkspace(workspaceId)}
+          onRename={openRenameDialog}
+          onDelete={openDeleteDialog}
+        />
+      </div>
+      <PanelResizeHandle
+        side="left"
+        label={layout.leftCollapsed ? '展开并调整工作区列表宽度' : '调整工作区列表宽度'}
+        testId="left-panel-resize-handle"
+        hiddenClassName="max-[820px]:hidden"
+        onBegin={(clientX) => beginResize('left', clientX)}
+        onMove={applyResize}
+        onEnd={endResize}
       />
 
-      <section className="flex flex-col gap-[18px] bg-card p-6">
+      <section className="flex min-w-0 flex-1 flex-col gap-[18px] bg-card p-6">
         {workspaceError ? (
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{workspaceError.message}</p>
         ) : null}
@@ -194,7 +246,7 @@ export function WorkspaceShell() {
               contentQuery={contentQuery}
               onContentQueryChange={setContentQuery}
               onAddApp={handleAddApp}
-              onSettings={() => openRenameDialog(selectedWorkspace.id)}
+              onSettings={() => void handleOpenSettings()}
               saveStatus={saveStatus}
               lastSavedAt={lastSavedAt}
               onRetrySave={() => void retrySave()}
@@ -219,7 +271,18 @@ export function WorkspaceShell() {
         )}
       </section>
 
-      <WhiteboardPanel workspaceId={selectedWorkspaceId} workspaceName={selectedWorkspace?.name} />
+      <PanelResizeHandle
+        side="right"
+        label="调整白板宽度"
+        testId="right-panel-resize-handle"
+        hiddenClassName="max-[1180px]:hidden"
+        onBegin={(clientX) => beginResize('right', clientX)}
+        onMove={applyResize}
+        onEnd={endResize}
+      />
+      <div className="flex min-h-screen shrink-0 max-[1180px]:hidden" style={{ width: layout.rightWidth }}>
+        <WhiteboardPanel workspaceId={selectedWorkspaceId} workspaceName={selectedWorkspace?.name} />
+      </div>
 
       <CreateWorkspaceDialog
         open={createDialogOpen}
@@ -227,6 +290,20 @@ export function WorkspaceShell() {
         errorMessage={createDialogOpen ? workspaceError?.message : null}
         onOpenChange={(open) => (open ? openCreateDialog() : closeCreateDialog())}
         onSubmit={handleCreated}
+      />
+
+      <SettingsDialog
+        open={settingsOpen}
+        settings={appSettings}
+        submitting={settingsSubmitting}
+        errorMessage={settingsError}
+        onOpenChange={(open) => {
+          setSettingsOpen(open);
+          if (!open) {
+            setSettingsError(null);
+          }
+        }}
+        onSubmit={handleSaveSettings}
       />
 
       <RenameWorkspaceDialog

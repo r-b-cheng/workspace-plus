@@ -93,6 +93,8 @@ pub struct LaunchAppRequest {
     pub display_name: String,
     pub installed_app_id: Option<String>,
     pub workspace_id: Option<String>,
+    #[serde(default)]
+    pub launch_args: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -1,0 +1,105 @@
+import json
+from pathlib import Path
+
+root = Path(__file__).resolve().parent
+package_ids = [
+    "pkg-07-settings-and-shortcut",
+    "pkg-08-quick-switch-panel",
+    "pkg-09-p0-acceptance",
+    "pkg-10-multi-window",
+    "pkg-11-macos-platform",
+    "pkg-12-window-embed",
+    "pkg-13-activity-observe",
+    "pkg-14-ai-canvas-summary",
+    "pkg-15-feynman-agent",
+    "pkg-16-device-sync",
+    "pkg-17-collaboration",
+    "pkg-18-plugin-marketplace",
+]
+
+packages = [json.loads((root / "packages" / pkg_id / "pkg.json").read_text(encoding="utf-8")) for pkg_id in package_ids]
+
+flow = {
+    "schemaVersion": 1,
+    "project": "workspace-hub",
+    "projectVersion": "0.1.0",
+    "planId": "p0-remainder-and-p2",
+    "planName": "补齐剩余 P0 后进入 P2",
+    "createdAt": "2026-08-20",
+    "status": "in_progress",
+    "sourceOfTruth": "docs/dev-plan/p0-p2-flow.json",
+    "packageDir": "docs/dev-plan/packages/<pkg-id>",
+    "previousPlan": "docs/dev-plan/development-flow.json",
+    "relatedSpecs": [
+        "docs/product/workspace-manager-prd.md",
+        "docs/process/project-development-plan.md",
+        "docs/specs/engineering-standards-and-tech-stack.md",
+        "docs/specs/data-model-and-storage-spec.md",
+        "docs/specs/platform-adapter-spec.md",
+        "docs/specs/frontend-workspace-ui-spec.md",
+        "docs/specs/test-and-acceptance-plan.md",
+        "docs/dev-plan/folder-structure.md",
+    ],
+    "lockedDecisions": {
+        "skipP1": True,
+        "skipP1Note": "用户要求先做完剩余 P0，然后直接做 P2。窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、安装包先不做。",
+        "remainingP0": "quick_switch_and_configurable_shortcut",
+        "defaultShortcut": "Control+KeyO",
+        "shortcutMustBeConfigurable": True,
+        "embedIsOptIn": True,
+        "embedNote": "默认仍是切到真实窗口。内嵌只做 Windows 实验，失败回退聚焦。",
+        "activityObserveIsOptIn": True,
+        "activityObserveNote": "只记前台窗口标题、进程名和时间。不钩键盘，不读软件内部，不上传。",
+        "agentUsesCanvasOnly": True,
+        "syncFirstSliceIsExportImport": True,
+        "collabFirstSliceIsReadOnlyShare": True,
+        "pluginFirstSliceIsLocalOnly": True,
+    },
+    "inScope": [
+        "可配置全局快捷键与注册失败反馈",
+        "快速切换面板：聚焦 / 重开 / 添加并打开",
+        "P0 剩余项联调与人工热键验收",
+        "同一软件多窗口列表与按窗口聚焦",
+        "macOS 真实扫描、启动、聚焦",
+        "可选的 Windows 窗口内嵌实验",
+        "可选的窗口标题活动观察",
+        "画布手动 AI 总结",
+        "基于画布的费曼学习 Agent",
+        "工作区导出导入",
+        "只读分享与本地评论",
+        "本机插件清单与白名单加载",
+    ],
+    "outOfScope": [
+        "P1：窗口截图预览、工作区别名编辑页、待办卡片、操作时间线手写增强、文件夹/URL/命令、工作区完整设置、白板导出单独产品化、Windows 安装包/签名/自动更新",
+        "默认强制内嵌全部软件",
+        "键盘钩子、剪贴板常驻、后台截屏、读取外部软件内部内容",
+        "自建云账号与实时 CRDT 同步",
+        "在线插件商店、付费、远程安装",
+        "Linux 平台适配",
+    ],
+    "executionRules": {
+        "singleImplementerOrder": package_ids,
+        "waves": [
+            {"id": "wave-p0", "packages": ["pkg-07-settings-and-shortcut", "pkg-08-quick-switch-panel", "pkg-09-p0-acceptance"]},
+            {"id": "wave-p2-a", "packages": ["pkg-10-multi-window", "pkg-11-macos-platform", "pkg-14-ai-canvas-summary", "pkg-16-device-sync", "pkg-18-plugin-marketplace"]},
+            {"id": "wave-p2-b", "packages": ["pkg-12-window-embed", "pkg-13-activity-observe", "pkg-15-feynman-agent", "pkg-17-collaboration"]},
+        ],
+        "onePackageAtATimeForSingleAgent": True,
+        "doNotExpandScope": True,
+        "frontendNoPlatformDetails": True,
+        "commandsMustStaySemantic": True,
+        "p0BeforeP2": True,
+        "syncRule": "改开发包时先改 packages/<pkg-id>/pkg.json，再改该包 README.md，最后运行 python docs/dev-plan/assemble-p0-p2-flow.py 同步总控。",
+    },
+    "completionCriteria": [
+        "能在设置里改快捷键；注册失败有原因",
+        "快捷键或测试入口打开快速切换面板，三种动作可用",
+        "系统级热键由 Windows 人工清单确认，不用 hook 冒充",
+        "P2 各包按自身验收执行，默认不打开内嵌、观察、Agent 自动请求、插件",
+    ],
+    "packages": packages,
+    "folderStructure": "docs/dev-plan/folder-structure.md",
+}
+
+(root / "p0-p2-flow.json").write_text(json.dumps(flow, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(f"wrote {len(packages)} packages")

@@ -6,6 +6,8 @@
 mod app;
 mod asset;
 mod canvas;
+mod settings;
+mod shortcut;
 mod window;
 mod workspace;
 
@@ -15,5 +17,10 @@ pub use app::{
 };
 pub use asset::{Asset, CanvasAssetContent};
 pub use canvas::{Canvas, CanvasEdge, CanvasEdgeInput, CanvasNode, CanvasNodeInput};
+pub use settings::{
+    AppSettings, DEFAULT_QUICK_SWITCH_SHORTCUT, REGISTRATION_CONFLICT, REGISTRATION_DENIED,
+    REGISTRATION_REGISTERED, REGISTRATION_UNREGISTERED,
+};
+pub use shortcut::{classify_registration_error, normalize_shortcut, to_plugin_accelerator};
 pub use window::{NativeWindow, NativeWindowId};
 pub use workspace::{DeleteWorkspaceResult, Workspace};

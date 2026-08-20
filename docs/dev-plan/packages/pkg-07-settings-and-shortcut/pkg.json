@@ -1,0 +1,125 @@
+{
+  "id": "pkg-07-settings-and-shortcut",
+  "seq": 7,
+  "title": "全局设置与可配置快捷键",
+  "status": "completed",
+  "dependsOn": [
+    "pkg-06-integration-acceptance"
+  ],
+  "parallelWith": [],
+  "ownerHint": "数据与本地存储智能体 / 平台适配智能体",
+  "goal": "把快捷键写进本地设置，启动时注册，失败能看见原因。默认候选是 Ctrl+O，但必须能改。本包不画快速切换面板。",
+  "changeScope": {
+    "summary": "补设置读写 command、快捷键注册与冲突反馈。前端只做最小设置入口。不做 launcher 浮层。",
+    "allowedPaths": [
+      "src-tauri/Cargo.toml",
+      "src-tauri/Cargo.lock",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/domain/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/storage/**",
+      "src-tauri/src/errors.rs",
+      "src-tauri/src/platform/**",
+      "src-tauri/tauri.conf.json",
+      "src-tauri/tests/**",
+      "src/features/api/**",
+      "src/features/settings/**",
+      "src/lib/types.ts",
+      "src/lib/errors.ts",
+      "src/app/workspace-shell.tsx",
+      "src/features/apps/components/current-workspace-header.tsx",
+      "src/test/**"
+    ],
+    "forbiddenPaths": [
+      "src/features/canvas/components/**",
+      "src-tauri/src/platform/windows/app_launch.rs",
+      "src-tauri/src/platform/windows/window_ops.rs"
+    ],
+    "allowedChanges": [
+      "复用 app_settings，增加 get_app_settings / update_app_settings",
+      "快捷键字段记录用户值、注册状态、最近失败原因",
+      "接入 tauri-plugin-global-shortcut 或等价能力",
+      "启动和改设置时重新注册；冲突或系统拒绝返回结构化错误",
+      "默认候选 Ctrl+O，禁止写死为唯一值",
+      "前端最小设置弹窗：改快捷键、看注册状态、失败文案",
+      "快捷键触发只发业务事件，例如 quick-switch:open，不在 Rust 里搜软件"
+    ],
+    "forbiddenChanges": [
+      "实现快速切换搜索浮层",
+      "实现文件夹 / URL / 命令启动",
+      "实现窗口截图预览或软件内嵌",
+      "把 HWND 或系统热键句柄传到前端",
+      "用 Zustand persist 当设置的长期存储"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d07-settings",
+      "name": "设置读写",
+      "description": "get_app_settings / update_app_settings 读写全局设置；快捷键配置进 SQLite，重启仍在。"
+    },
+    {
+      "id": "d07-register",
+      "name": "快捷键注册",
+      "description": "按当前设置注册全局快捷键；成功、冲突、系统拒绝三种状态可区分。"
+    },
+    {
+      "id": "d07-settings-ui",
+      "name": "最小设置入口",
+      "description": "用户能改快捷键并看到是否注册成功。顶栏“工作区设置”不要再只打开重命名。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s07-01",
+      "title": "定义设置 DTO 与默认快捷键",
+      "status": "completed",
+      "doneWhen": "存在 AppSettings；quickSwitchShortcut 默认 Control+KeyO；含 registrationStatus 与 lastError。"
+    },
+    {
+      "id": "s07-02",
+      "title": "实现设置 repository / service / command",
+      "status": "completed",
+      "doneWhen": "读写走 app_settings；非法组合返回 VALIDATION；空值回落到默认。"
+    },
+    {
+      "id": "s07-03",
+      "title": "注册与注销全局快捷键",
+      "status": "completed",
+      "doneWhen": "启动按库中值注册；更新设置先注销再注册；失败不崩溃，状态可查。"
+    },
+    {
+      "id": "s07-04",
+      "title": "快捷键只发打开事件",
+      "status": "completed",
+      "doneWhen": "按下已注册组合后发出 quick-switch:open；Rust 不实现搜索和聚焦。"
+    },
+    {
+      "id": "s07-05",
+      "title": "最小设置弹窗",
+      "status": "completed",
+      "doneWhen": "能改快捷键、看到成功或冲突；设置走 settingsApi，组件不直接 invoke。"
+    },
+    {
+      "id": "s07-06",
+      "title": "补 Rust 与 Vitest",
+      "status": "completed",
+      "doneWhen": "默认值、非法快捷键、失败状态有测试。全局热键是否真正抢到系统级留给 pkg-09 人工清单。"
+    }
+  ],
+  "commands": [
+    "get_app_settings",
+    "update_app_settings"
+  ],
+  "acceptance": [
+    "重启后仍使用上次保存的快捷键",
+    "Ctrl+O 只是默认候选，设置里能改成别的组合",
+    "注册失败有明确文案，应用能继续用",
+    "本包 diff 里没有快速切换面板"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-07-settings-and-shortcut/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-07-settings-and-shortcut/README.md"
+  }
+}

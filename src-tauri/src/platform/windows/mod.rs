@@ -17,6 +17,14 @@ mod icon;
 mod manual_target;
 mod window_ops;
 
+pub(crate) fn resolve_shortcut_exe(path: &str) -> Option<String> {
+    let path = path.to_string();
+    run_sta(move || app_scan::resolve_shortcut_target(std::path::Path::new(&path)))
+        .ok()
+        .map(|resolved| resolved.target_path)
+        .filter(|target| crate::platform::rules::is_executable_path(target))
+}
+
 /// Native Windows adapter. Tests should keep injecting `MockPlatformAdapter`.
 pub struct WindowsPlatformAdapter;
 

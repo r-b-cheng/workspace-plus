@@ -319,6 +319,117 @@ fn focus_missing_or_closed_window_returns_window_closed() {
 }
 
 #[test]
+fn focus_rediscovers_running_window_after_stale_handle() {
+    let env = setup();
+    let workspace = env.service.create_workspace("窗口", None, None, None).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    let stale_id = launched.native_window_id.clone().expect("mock window");
+    env.adapter.close_window(&stale_id);
+
+    let live_id = env.adapter.open_window(
+        "Google Chrome",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    );
+    let focused = env.service.focus_workspace_app(&launched.id).unwrap();
+    assert_eq!(focused.status, "running");
+    assert_eq!(focused.native_window_id.as_deref(), Some(live_id.as_str()));
+}
+
+#[test]
+fn focus_finds_window_even_when_launch_never_bound_one() {
+    let env = setup();
+    let workspace = env.service.create_workspace("窗口", None, None, None).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    if let Some(native_id) = launched.native_window_id.as_deref() {
+        env.adapter.close_window(native_id);
+    }
+    env.adapter.open_window("Inbox - Google Chrome", r"C:\Program Files\Google\Chrome\Application\chrome.exe");
+    let focused = env.service.focus_workspace_app(&launched.id).unwrap();
+    assert_eq!(focused.status, "running");
+    assert!(focused.native_window_id.is_some());
+}
+
+#[test]
+fn focus_ignores_same_filename_from_another_folder() {
+    let env = setup();
+    let workspace = env.service.create_workspace("窗口", None, None, None).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    if let Some(native_id) = launched.native_window_id.as_deref() {
+        env.adapter.close_window(native_id);
+    }
+    env.adapter
+        .open_window("Google Chrome", r"D:\Downloads\chrome.exe");
+    let err = env.service.focus_workspace_app(&launched.id).unwrap_err();
+    assert_eq!(err.code, "WindowClosed");
+}
+
+#[test]
+fn launch_does_not_bind_a_preexisting_same_app_window() {
+    let env = setup();
+    let workspace = env.service.create_workspace("窗口", None, None, None).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let preexisting = env.adapter.open_window(
+        "Already open",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    );
+    env.adapter.omit_next_launch_window();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    assert_eq!(launched.status, "running");
+    assert!(launched.native_window_id.is_none());
+
+    env.adapter.open_window(
+        "Second Chrome",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    );
+    let err = env.service.focus_workspace_app(&launched.id).unwrap_err();
+    assert_eq!(err.code, "WindowClosed");
+    assert_ne!(Some(preexisting.as_str()), launched.native_window_id.as_deref());
+}
+
+#[test]
 fn save_canvas_asset_writes_file_not_blob() {
     let env = setup();
     let png = base64_png();
@@ -342,6 +453,74 @@ fn read_canvas_asset_missing_is_not_found() {
     let env = setup();
     let err = env.service.read_canvas_asset("missing-asset").unwrap_err();
     assert_eq!(err.code, "NotFound");
+}
+
+#[test]
+fn app_settings_default_shortcut_is_control_key_o() {
+    let env = setup();
+    let settings = env.service.get_app_settings().unwrap();
+    assert_eq!(settings.quick_switch_shortcut, "Control+KeyO");
+    assert_eq!(settings.registration_status, "unregistered");
+    assert!(settings.last_error.is_none());
+}
+
+#[test]
+fn app_settings_shortcut_survives_reopen() {
+    let tmp = TempDir::new().expect("temp dir");
+    let adapter = Arc::new(MockPlatformAdapter::new());
+    {
+        let service = AppService::open(tmp.path(), adapter.clone() as Arc<dyn PlatformAdapter>)
+            .expect("open db");
+        service
+            .update_app_settings(Some("Alt+KeyK".into()))
+            .unwrap();
+    }
+    let service =
+        AppService::open(tmp.path(), adapter as Arc<dyn PlatformAdapter>).expect("reopen db");
+    let settings = service.get_app_settings().unwrap();
+    assert_eq!(settings.quick_switch_shortcut, "Alt+KeyK");
+}
+
+#[test]
+fn app_settings_empty_shortcut_falls_back_to_default() {
+    let env = setup();
+    let settings = env.service.update_app_settings(Some("   ".into())).unwrap();
+    assert_eq!(settings.quick_switch_shortcut, "Control+KeyO");
+    let again = env.service.update_app_settings(Some(String::new())).unwrap();
+    assert_eq!(again.quick_switch_shortcut, "Control+KeyO");
+}
+
+#[test]
+fn app_settings_rejects_invalid_shortcuts() {
+    let env = setup();
+    for invalid in ["O", "Control+", "not-a-shortcut"] {
+        let err = env
+            .service
+            .update_app_settings(Some(invalid.into()))
+            .unwrap_err();
+        assert_eq!(err.code, "Validation", "{invalid}");
+    }
+}
+
+#[test]
+fn app_settings_records_registration_failure() {
+    let env = setup();
+    env.service
+        .record_shortcut_registration("conflict", Some("快捷键冲突：已被占用".into()))
+        .unwrap();
+    let settings = env.service.get_app_settings().unwrap();
+    assert_eq!(settings.registration_status, "conflict");
+    assert_eq!(settings.last_error.as_deref(), Some("快捷键冲突：已被占用"));
+
+    env.service
+        .record_shortcut_registration("denied", Some("系统拒绝注册该快捷键".into()))
+        .unwrap();
+    let denied = env.service.get_app_settings().unwrap();
+    assert_eq!(denied.registration_status, "denied");
+    assert_eq!(
+        denied.last_error.as_deref(),
+        Some("系统拒绝注册该快捷键")
+    );
 }
 
 fn base64_png() -> String {

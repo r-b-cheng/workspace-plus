@@ -9,17 +9,22 @@ use base64::Engine;
 use rusqlite::Connection;
 
 use crate::domain::{
-    Asset, Canvas, CanvasAssetContent, CanvasEdge, CanvasEdgeInput, CanvasNode, CanvasNodeInput,
-    DeleteWorkspaceResult, InstalledApp, RemoveWorkspaceAppResult, Workspace, WorkspaceApp,
+    normalize_shortcut, AppSettings, Asset, Canvas, CanvasAssetContent, CanvasEdge,
+    CanvasEdgeInput, CanvasNode, CanvasNodeInput, DeleteWorkspaceResult, InstalledApp,
+    RemoveWorkspaceAppResult, Workspace, WorkspaceApp, DEFAULT_QUICK_SWITCH_SHORTCUT,
+    REGISTRATION_UNREGISTERED,
 };
 use crate::errors::AppError;
 use crate::platform::{
-    FocusWindowRequest, LaunchAppRequest, PlatformAdapter, ResolveManualAppTargetRequest,
-    ScanInstalledAppsRequest, ScannedApp,
+    FocusWindowRequest, LaunchAppRequest, ListWindowsRequest, PlatformAdapter, PlatformWindow,
+    ResolveManualAppTargetRequest, ScanInstalledAppsRequest, ScannedApp,
+};
+use crate::platform::rules::{
+    is_executable_path, path_extension, pick_focus_window, WindowMatchHint,
 };
 use crate::storage::{
     self, new_id, normalize_name, now_utc, open_database, sha256_hex, AppPaths, InstalledAppRow,
-    WorkspaceAppRow, ACTIVE_WORKSPACE_KEY,
+    WorkspaceAppRow, ACTIVE_WORKSPACE_KEY, QUICK_SWITCH_SHORTCUT_KEY,
 };
 
 const ALLOWED_NODE_TYPES: &[&str] = &[
@@ -32,11 +37,27 @@ const ALLOWED_NODE_TYPES: &[&str] = &[
     "app_note",
 ];
 
+#[derive(Clone, Debug)]
+struct ShortcutRegistrationState {
+    status: String,
+    last_error: Option<String>,
+}
+
+impl Default for ShortcutRegistrationState {
+    fn default() -> Self {
+        Self {
+            status: REGISTRATION_UNREGISTERED.to_string(),
+            last_error: None,
+        }
+    }
+}
+
 /// Orchestrates repositories and the injectable platform adapter.
 pub struct AppService {
     conn: Mutex<Connection>,
     adapter: Arc<dyn PlatformAdapter>,
     paths: AppPaths,
+    shortcut_registration: Mutex<ShortcutRegistrationState>,
 }
 
 impl AppService {
@@ -48,6 +69,7 @@ impl AppService {
             conn: Mutex::new(conn),
             adapter,
             paths,
+            shortcut_registration: Mutex::new(ShortcutRegistrationState::default()),
         })
     }
 
@@ -79,6 +101,61 @@ impl AppService {
         self.conn
             .lock()
             .map_err(|_| AppError::internal("database lock is poisoned"))
+    }
+
+    fn lock_registration(&self) -> Result<MutexGuard<'_, ShortcutRegistrationState>, AppError> {
+        self.shortcut_registration
+            .lock()
+            .map_err(|_| AppError::internal("shortcut registration lock is poisoned"))
+    }
+
+    pub fn get_app_settings(&self) -> Result<AppSettings, AppError> {
+        let stored = {
+            let conn = self.lock_db()?;
+            storage::settings_get(&conn, QUICK_SWITCH_SHORTCUT_KEY)?
+        };
+        let shortcut = match stored.as_deref() {
+            None => DEFAULT_QUICK_SWITCH_SHORTCUT.to_string(),
+            Some(raw) => match normalize_shortcut(Some(raw)) {
+                Ok(normalized) => normalized,
+                Err(_) => DEFAULT_QUICK_SWITCH_SHORTCUT.to_string(),
+            },
+        };
+        let registration = self.lock_registration()?;
+        Ok(AppSettings {
+            quick_switch_shortcut: shortcut,
+            registration_status: registration.status.clone(),
+            last_error: registration.last_error.clone(),
+        })
+    }
+
+    pub fn update_app_settings(
+        &self,
+        quick_switch_shortcut: Option<String>,
+    ) -> Result<AppSettings, AppError> {
+        let normalized = normalize_shortcut(quick_switch_shortcut.as_deref())?;
+        {
+            let conn = self.lock_db()?;
+            storage::settings_set(
+                &conn,
+                QUICK_SWITCH_SHORTCUT_KEY,
+                Some(&normalized),
+                None,
+                &now_utc(),
+            )?;
+        }
+        self.get_app_settings()
+    }
+
+    pub fn record_shortcut_registration(
+        &self,
+        status: &str,
+        last_error: Option<String>,
+    ) -> Result<(), AppError> {
+        let mut registration = self.lock_registration()?;
+        registration.status = status.to_string();
+        registration.last_error = last_error.filter(|value| !value.trim().is_empty());
+        Ok(())
     }
 
     pub fn list_workspaces(&self) -> Result<Vec<Workspace>, AppError> {
@@ -296,7 +373,7 @@ impl AppService {
         workspace_id: &str,
         installed_app_id: &str,
     ) -> Result<WorkspaceApp, AppError> {
-        let (target, display_name, workspace_app_id) = {
+        let (target, display_name, workspace_app_id, launch_args) = {
             let mut conn = self.lock_db()?;
             let tx = conn.transaction()?;
             require_workspace(&tx, workspace_id)?;
@@ -319,7 +396,12 @@ impl AppService {
                 &now,
             )?;
             tx.commit()?;
-            (app.launch_target, app.display_name, workspace_app.id)
+            (
+                app.launch_target,
+                app.display_name,
+                workspace_app.id,
+                app.launch_args,
+            )
         };
 
         let launched = self.adapter.launch_app(&LaunchAppRequest {
@@ -327,6 +409,7 @@ impl AppService {
             display_name,
             installed_app_id: Some(installed_app_id.to_string()),
             workspace_id: Some(workspace_id.to_string()),
+            launch_args,
         });
 
         let mut conn = self.lock_db()?;
@@ -334,29 +417,27 @@ impl AppService {
         let now = now_utc();
         match launched {
             Ok(result) => {
-                let window_row_id = new_id();
                 if let Some(native_window_id) = result.native_window_id.as_deref() {
-                    storage::native_window_insert(
+                    insert_running_window(
                         &tx,
-                        &window_row_id,
                         workspace_id,
                         &workspace_app_id,
-                        "windows",
                         native_window_id,
-                        result.process_id.map(|value| value as i64),
+                        result.process_id,
                         result.process_path.as_deref(),
                         result.title.as_deref(),
                         &now,
                     )?;
+                } else {
+                    storage::workspace_app_update_launch(
+                        &tx,
+                        &workspace_app_id,
+                        "running",
+                        None,
+                        &now,
+                        &now,
+                    )?;
                 }
-                storage::workspace_app_update_launch(
-                    &tx,
-                    &workspace_app_id,
-                    "running",
-                    result.native_window_id.as_ref().map(|_| window_row_id.as_str()),
-                    &now,
-                    &now,
-                )?;
             }
             Err(err) => {
                 storage::workspace_app_update_launch(
@@ -379,39 +460,84 @@ impl AppService {
     }
 
     pub fn focus_workspace_app(&self, workspace_app_id: &str) -> Result<WorkspaceApp, AppError> {
-        let (workspace_id, last_window_id, external_id) = {
+        let (workspace_id, installed_app, workspace_app, binding, exclude_window_ids) = {
             let conn = self.lock_db()?;
             let row = storage::workspace_app_get(&conn, workspace_app_id)?
                 .filter(|item| item.deleted_at.is_none())
                 .ok_or_else(|| AppError::not_found("workspace app not found"))?;
+            let app = storage::installed_app_get(&conn, &row.installed_app_id)?
+                .ok_or_else(|| AppError::not_found("installed app not found"))?;
             let binding = match row.last_window_id.as_deref() {
-                Some(window_id) => storage::native_window_get_external_id(&conn, window_id)?,
+                Some(window_id) => storage::native_window_get_binding(&conn, window_id)?,
                 None => None,
             };
-            (row.workspace_id, row.last_window_id, binding)
+            let exclude_window_ids =
+                storage::native_window_bound_external_ids(&conn, Some(&row.id))?;
+            (row.workspace_id.clone(), app, row, binding, exclude_window_ids)
         };
 
-        let Some((window_row_id, external_id)) = last_window_id.zip(external_id.map(|(id, _)| id))
-        else {
-            let conn = self.lock_db()?;
-            let now = now_utc();
-            storage::workspace_app_update_focus(&conn, workspace_app_id, "window_closed", None, &now)?;
+        let display_name = workspace_app
+            .display_alias
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(&installed_app.display_name)
+            .to_string();
+        let mut hint = window_match_hint(
+            &display_name,
+            installed_app.executable_path.as_deref(),
+            Some(installed_app.launch_target.as_str()),
+            installed_app.install_location.as_deref(),
+            binding.as_ref(),
+        );
+        hint.exclude_window_ids = exclude_window_ids;
+
+        let stored_id = binding.as_ref().map(|item| item.external_window_id.clone());
+        let windows = match self.adapter.list_windows(&ListWindowsRequest::default()) {
+            Ok(windows) => windows,
+            Err(_) => Vec::new(),
+        };
+        let target = pick_focus_window(&windows, &hint);
+
+        let Some(target) = target else {
+            if let Some(window_row_id) = workspace_app.last_window_id.as_deref() {
+                let conn = self.lock_db()?;
+                let now = now_utc();
+                storage::native_window_mark_closed(&conn, window_row_id, &now)?;
+                storage::workspace_app_update_focus(
+                    &conn,
+                    workspace_app_id,
+                    "window_closed",
+                    None,
+                    &now,
+                )?;
+            } else {
+                let conn = self.lock_db()?;
+                storage::workspace_app_update_focus(
+                    &conn,
+                    workspace_app_id,
+                    "window_closed",
+                    None,
+                    &now_utc(),
+                )?;
+            }
             return Err(AppError::window_closed("workspace app has no open window"));
         };
 
         match self.adapter.focus_window(&FocusWindowRequest {
-            native_window_id: external_id,
+            native_window_id: target.native_window_id.clone(),
         }) {
             Ok(_) => {
                 let mut conn = self.lock_db()?;
                 let tx = conn.transaction()?;
                 let now = now_utc();
-                storage::native_window_touch_focus(&tx, &window_row_id, &now)?;
-                storage::workspace_app_update_focus(
+                bind_discovered_window(
                     &tx,
+                    &workspace_id,
                     workspace_app_id,
-                    "running",
-                    Some(&now),
+                    workspace_app.last_window_id.as_deref(),
+                    stored_id.as_deref(),
+                    &target,
                     &now,
                 )?;
                 tx.commit()?;
@@ -421,29 +547,34 @@ impl AppService {
                     .ok_or_else(|| AppError::not_found("workspace app not found"))
             }
             Err(err) if err.code.as_str() == "WindowClosed" => {
-                let mut conn = self.lock_db()?;
-                let tx = conn.transaction()?;
+                let conn = self.lock_db()?;
                 let now = now_utc();
-                storage::native_window_mark_closed(&tx, &window_row_id, &now)?;
+                if let Some(window_row_id) = workspace_app.last_window_id.as_deref() {
+                    storage::native_window_mark_closed(&conn, window_row_id, &now)?;
+                }
                 storage::workspace_app_update_focus(
-                    &tx,
+                    &conn,
                     workspace_app_id,
                     "window_closed",
                     None,
                     &now,
                 )?;
-                tx.commit()?;
                 Err(err.into())
             }
             Err(err) if err.code.as_str() == "FocusDenied" => {
-                let conn = self.lock_db()?;
-                storage::workspace_app_update_focus(
-                    &conn,
+                let mut conn = self.lock_db()?;
+                let tx = conn.transaction()?;
+                let now = now_utc();
+                bind_discovered_window(
+                    &tx,
+                    &workspace_id,
                     workspace_app_id,
-                    "focus_denied",
-                    None,
-                    &now_utc(),
+                    workspace_app.last_window_id.as_deref(),
+                    stored_id.as_deref(),
+                    &target,
+                    &now,
                 )?;
+                tx.commit()?;
                 Err(err.into())
             }
             Err(err) => Err(err.into()),
@@ -604,6 +735,7 @@ impl AppService {
             content_base64,
         })
     }
+
 }
 
 fn write_asset_file(path: &PathBuf, bytes: &[u8]) -> Result<(), AppError> {
@@ -735,6 +867,121 @@ fn ensure_workspace_app(
     };
     storage::workspace_app_insert(conn, &row)?;
     Ok(row)
+}
+
+fn window_match_hint(
+    display_name: &str,
+    executable_path: Option<&str>,
+    launch_target: Option<&str>,
+    install_location: Option<&str>,
+    binding: Option<&storage::NativeWindowBinding>,
+) -> WindowMatchHint {
+    WindowMatchHint {
+        process_id: binding.and_then(|item| item.process_id.map(|value| value as u32)),
+        process_path: None,
+        executable_path: known_executable_path(executable_path, launch_target),
+        launch_target: launch_target.map(ToOwned::to_owned),
+        install_location: install_location.map(ToOwned::to_owned),
+        display_name: display_name.to_string(),
+        title_hint: binding.and_then(|item| item.title.clone()),
+        stored_window_id: binding.map(|item| item.external_window_id.clone()),
+        exclude_window_ids: Vec::new(),
+    }
+}
+
+fn known_executable_path(executable_path: Option<&str>, launch_target: Option<&str>) -> Option<String> {
+    if let Some(path) = executable_path.filter(|path| is_executable_path(path)) {
+        return Some(path.to_string());
+    }
+    if let Some(path) = launch_target.filter(|path| is_executable_path(path)) {
+        return Some(path.to_string());
+    }
+    launch_target
+        .filter(|path| path_extension(path) == "lnk")
+        .and_then(resolve_shortcut_executable)
+}
+
+fn resolve_shortcut_executable(path: &str) -> Option<String> {
+    #[cfg(windows)]
+    {
+        crate::platform::windows::resolve_shortcut_exe(path)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        None
+    }
+}
+
+fn insert_running_window(
+    conn: &Connection,
+    workspace_id: &str,
+    workspace_app_id: &str,
+    native_window_id: &str,
+    process_id: Option<u32>,
+    process_path: Option<&str>,
+    title: Option<&str>,
+    now: &str,
+) -> Result<(), AppError> {
+    let window_row_id = new_id();
+    storage::native_window_insert(
+        conn,
+        &window_row_id,
+        workspace_id,
+        workspace_app_id,
+        "windows",
+        native_window_id,
+        process_id.map(|value| value as i64),
+        process_path,
+        title,
+        now,
+    )?;
+    storage::workspace_app_update_launch(
+        conn,
+        workspace_app_id,
+        "running",
+        Some(&window_row_id),
+        now,
+        now,
+    )?;
+    Ok(())
+}
+
+fn bind_discovered_window(
+    conn: &Connection,
+    workspace_id: &str,
+    workspace_app_id: &str,
+    previous_window_row_id: Option<&str>,
+    stored_external_id: Option<&str>,
+    window: &PlatformWindow,
+    now: &str,
+) -> Result<(), AppError> {
+    let window_row_id = if stored_external_id == Some(window.native_window_id.as_str()) {
+        previous_window_row_id
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(new_id)
+    } else {
+        if let Some(old_id) = previous_window_row_id {
+            storage::native_window_mark_closed(conn, old_id, now)?;
+        }
+        let window_row_id = new_id();
+        storage::native_window_insert(
+            conn,
+            &window_row_id,
+            workspace_id,
+            workspace_app_id,
+            "windows",
+            &window.native_window_id,
+            window.process_id.map(|value| value as i64),
+            window.process_path.as_deref(),
+            Some(window.title.as_str()),
+            now,
+        )?;
+        window_row_id
+    };
+    storage::native_window_touch_focus(conn, &window_row_id, now)?;
+    storage::workspace_app_bind_window(conn, workspace_app_id, &window_row_id, "running", now)?;
+    Ok(())
 }
 
 fn merge_scanned_app(conn: &Connection, app: &ScannedApp, now: &str) -> Result<(), AppError> {

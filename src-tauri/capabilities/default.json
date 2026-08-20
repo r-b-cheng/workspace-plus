@@ -3,5 +3,11 @@
   "identifier": "default",
   "description": "Default capabilities for Workspace Hub, including file dialog for manual exe/lnk.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all"
+  ]
 }

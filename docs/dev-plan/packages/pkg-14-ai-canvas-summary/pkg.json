@@ -1,0 +1,100 @@
+{
+  "id": "pkg-14-ai-canvas-summary",
+  "seq": 14,
+  "title": "画布内容的手动 AI 总结",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-09-p0-acceptance"
+  ],
+  "parallelWith": [
+    "pkg-13-activity-observe"
+  ],
+  "ownerHint": "白板 Canvas 智能体 / 数据与本地存储智能体",
+  "goal": "用户手动触发后，只根据当前工作区画布上的 Markdown、图片标题和连线生成一份可编辑总结。不读外部软件，不默认自动请求模型。",
+  "changeScope": {
+    "summary": "先做画布上下文抽取、provider 配置、手动总结 command 和一张可撤销的总结卡片。不做费曼问答，不监听外部软件。",
+    "allowedPaths": [
+      "src-tauri/migrations/**",
+      "src-tauri/src/domain/**",
+      "src-tauri/src/storage/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/errors.rs",
+      "src/features/canvas/**",
+      "src/features/settings/**",
+      "src/features/api/**",
+      "src/lib/types.ts",
+      "src/test/**"
+    ],
+    "forbiddenPaths": [
+      "src-tauri/src/platform/windows/**",
+      "src/features/quick-switch/**"
+    ],
+    "allowedChanges": [
+      "抽取当前选中节点、当前视口或整张画布的文本上下文",
+      "用户配置 LLM provider / API key，密钥不进白板表、不进日志",
+      "summarize_canvas 手动触发，生成 markdown 卡片",
+      "结果可编辑、可删除、可视为普通白板卡片",
+      "没配置 provider 时给出设置指引，不静默失败"
+    ],
+    "forbiddenChanges": [
+      "输入时自动请求模型",
+      "读取外部软件内部内容",
+      "实现费曼追问循环（放到 pkg-15）",
+      "把密钥写进 canvas_nodes"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d14-context",
+      "name": "画布上下文抽取",
+      "description": "可选择当前节点 / 视口 / 全画布，输出稳定的文本包。"
+    },
+    {
+      "id": "d14-summary",
+      "name": "手动总结卡片",
+      "description": "一次点击生成一张可编辑 Markdown 卡片，失败可重试。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s14-01",
+      "title": "上下文抽取格式",
+      "status": "pending",
+      "doneWhen": "只含用户放进画布的标题、正文、图片说明和连线，不含软件内部内容。"
+    },
+    {
+      "id": "s14-02",
+      "title": "provider 与密钥设置",
+      "status": "pending",
+      "doneWhen": "设置可保存；密钥不进白板；未配置时有说明。"
+    },
+    {
+      "id": "s14-03",
+      "title": "手动 summarize_canvas",
+      "status": "pending",
+      "doneWhen": "生成卡片并自动保存；失败保留原文案。"
+    },
+    {
+      "id": "s14-04",
+      "title": "测试",
+      "status": "pending",
+      "doneWhen": "抽取范围、未配置 provider、生成卡片有测试。可用 mock provider。"
+    }
+  ],
+  "commands": [
+    "get_ai_settings",
+    "update_ai_settings",
+    "summarize_canvas"
+  ],
+  "acceptance": [
+    "默认不请求任何模型",
+    "总结只来自画布",
+    "生成结果是普通可编辑卡片",
+    "密钥不出现在画布数据和日志里"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-14-ai-canvas-summary/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-14-ai-canvas-summary/README.md"
+  }
+}

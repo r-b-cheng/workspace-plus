@@ -13,16 +13,27 @@ pub use platform::WindowsPlatformAdapter;
 pub use services::AppService;
 
 use tauri::Manager;
+use tauri_plugin_global_shortcut::ShortcutState;
 
 pub fn run() {
     let _ = tracing_subscriber::fmt::try_init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        commands::settings::emit_quick_switch_open(app);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             let app_data = app.path().app_data_dir().map_err(|err| err.to_string())?;
             let service = AppService::open(app_data, crate::platform::default_adapter())
                 .map_err(|err| err.to_string())?;
+            commands::settings::apply_quick_switch_shortcut(app.handle(), &service, None);
             app.manage(service);
             Ok(())
         })
@@ -46,6 +57,8 @@ pub fn run() {
             commands::canvas::read_canvas_asset,
             commands::canvas::upsert_canvas_node,
             commands::canvas::delete_canvas_node,
+            commands::settings::get_app_settings,
+            commands::settings::update_app_settings,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Workspace Hub");

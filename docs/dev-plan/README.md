@@ -1,35 +1,50 @@
-# 第一版竖切开发计划
+# 开发计划
 
 制定日期：2026-08-20
 
-本目录是 Workspace Hub 第一版竖切的执行计划。规格文档在 `docs/product/` 和 `docs/specs/`；**具体改哪些文件、交什么、子任务做到哪**以这里为准。
+规格文档在 `docs/product/` 和 `docs/specs/`。**具体改哪些文件、交什么、子任务做到哪**以当前总控 JSON 为准。
 
-目录怎么拆、一个文件夹里能放什么，见 [folder-structure.md](./folder-structure.md)。
+目录怎么拆，见 [folder-structure.md](./folder-structure.md)。
 
 ## 文件怎么读
 
-- 总控：[`development-flow.json`](./development-flow.json)  
-  整个开发流程在这一个 JSON 里。每个开发包是其中一块。
+- 已完成竖切：[`development-flow.json`](./development-flow.json)  
+  pkg-01 到 pkg-06，状态 `completed`。
+- 当前总控：[`p0-p2-flow.json`](./p0-p2-flow.json)  
+  先补剩余 P0（快捷键 + 快速切换），再做 P2。本轮按用户决定跳过 P1。
 - 分包：[`packages/<pkg-id>/`](./packages/)  
-  每个包自己的文件夹，里面是 `pkg.json` 和 `README.md`，不要把不同包平铺在一起。
+  每个包自己的文件夹，里面是 `pkg.json` 和 `README.md`。
 
-改开发包时，先改该包 `pkg.json`，再改该包 `README.md`，最后同步总控 JSON。
+改开发包时，先改该包 `pkg.json`，再改该包 `README.md`，最后运行 `python docs/dev-plan/assemble-p0-p2-flow.py` 同步当前总控。
 
-## 开发包顺序
+## 当前顺序
 
-| 包 | 名称 | 依赖 |
-|---|---|---|
-| [pkg-01](./packages/pkg-01-engineering-foundation/) | 工程基础：Tailwind、shadcn、目录规范 | 无 |
-| [pkg-02](./packages/pkg-02-storage-and-commands/) | 数据层、业务 command、mock 平台 | 无，可与 01 并行 |
-| [pkg-03](./packages/pkg-03-frontend-workspace/) | 前端工作区主界面接通 | 01、02 |
-| [pkg-04](./packages/pkg-04-whiteboard-canvas/) | 白板：Markdown / 图片 / 拖拽缩放 / 自动保存 | 01、02、03 |
-| [pkg-05](./packages/pkg-05-windows-platform/) | Windows 真实扫描、启动、窗口置前 | 02，可与 03/04 并行 |
-| [pkg-06](./packages/pkg-06-integration-acceptance/) | 竖切联调、失败态、验收测试 | 03、04、05 |
+| 包 | 名称 | 阶段 | 依赖 |
+|---|---|---|---|
+| [pkg-07](./packages/pkg-07-settings-and-shortcut/) | 全局设置与可配置快捷键 | P0 | 竖切完成 |
+| [pkg-08](./packages/pkg-08-quick-switch-panel/) | 快速切换面板 | P0 | 07 |
+| [pkg-09](./packages/pkg-09-p0-acceptance/) | P0 剩余项联调验收 | P0 | 07、08 |
+| [pkg-10](./packages/pkg-10-multi-window/) | 同一软件多窗口 | P2 | 09 |
+| [pkg-11](./packages/pkg-11-macos-platform/) | macOS 真实平台 | P2 | 09，可与 10 并行 |
+| [pkg-12](./packages/pkg-12-window-embed/) | 可选窗口内嵌（实验） | P2 | 10 |
+| [pkg-13](./packages/pkg-13-activity-observe/) | 可选窗口活动观察 | P2 | 10 |
+| [pkg-14](./packages/pkg-14-ai-canvas-summary/) | 画布手动 AI 总结 | P2 | 09 |
+| [pkg-15](./packages/pkg-15-feynman-agent/) | 费曼学习 Agent | P2 | 14 |
+| [pkg-16](./packages/pkg-16-device-sync/) | 工作区导出导入 | P2 | 09 |
+| [pkg-17](./packages/pkg-17-collaboration/) | 只读分享与评论 | P2 | 16 |
+| [pkg-18](./packages/pkg-18-plugin-marketplace/) | 本机插件加载 | P2 | 09 |
 
-单人顺序：`01 → 02 → 03 → 04 → 05 → 06`。
+单人顺序：`07 → 08 → 09`，然后按 P2 依赖往下。一次只做一个包。
 
-## 这一刀做什么、不做什么
+## 这一轮做什么、不做什么
 
-做完的标志：空状态新建工作区 → 搜索或手动添加 exe/快捷方式 → 启动并加入工作区 → 点卡片切窗口 → 窗口关闭有提示并能重开 → 白板 Markdown/图片重启还在 → 删工作区或移出软件只删关联。
+先做完第一版还缺的 P0：可配置快捷键、快速切换面板、热键人工验收。
 
-不做：快速切换、全局快捷键、安装包、待办卡片、操作时间线、文件夹/URL/命令、窗口截图预览、软件内嵌、费曼 Agent。
+再做 P2，但每包都是第一刀，不是把愿景一次做完：
+
+- 内嵌默认关，失败回退到真实窗口
+- 活动观察默认关，只记窗口标题，不钩键盘
+- Agent 只看画布，默认手动触发
+- 同步先做导出导入，协作先做只读分享，插件先做本机加载
+
+本轮不做 P1：窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、Windows 安装包。

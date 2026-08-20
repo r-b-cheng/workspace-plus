@@ -89,7 +89,7 @@ export function CurrentWorkspaceHeader({
         onClick={onSettings}
       >
         <Settings size={18} />
-        工作区设置
+        设置
       </Button>
     </header>
   );

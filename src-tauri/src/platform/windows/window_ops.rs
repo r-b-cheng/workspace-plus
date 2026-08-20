@@ -7,9 +7,9 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AllowSetForegroundWindow, BringWindowToTop, EnumWindows, GetAncestor, GetForegroundWindow,
-    GetWindow, GetWindowLongPtrW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow,
-    IsWindowVisible, SetForegroundWindow, ShowWindow, ASFW_ANY, GA_ROOT, GW_OWNER, GWL_EXSTYLE,
-    SW_RESTORE, SW_SHOW, WS_EX_TOOLWINDOW,
+    GetWindow, GetWindowLongW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow,
+    IsWindowVisible, SetForegroundWindow, ShowWindow, SwitchToThisWindow, ASFW_ANY, GA_ROOT,
+    GWL_EXSTYLE, GW_OWNER, SW_RESTORE, SW_SHOW, WS_EX_TOOLWINDOW,
 };
 
 use crate::platform::rules::{decode_opaque_window_id, encode_opaque_window_id};
@@ -89,13 +89,12 @@ unsafe fn is_candidate_window(hwnd: HWND) -> bool {
     if !IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() {
         return false;
     }
-    if let Ok(owner) = GetWindow(hwnd, GW_OWNER) {
-        if !owner.0.is_null() {
-            return false;
-        }
+    let owner = GetWindow(hwnd, GW_OWNER).unwrap_or_default();
+    if !owner.0.is_null() {
+        return false;
     }
-    let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    if ex_style & WS_EX_TOOLWINDOW.0 as isize != 0 {
+    let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+    if ex_style & WS_EX_TOOLWINDOW.0 != 0 {
         return false;
     }
     let mut title = [0u16; 512];
@@ -183,15 +182,29 @@ unsafe fn try_set_foreground(hwnd: HWND) -> bool {
     let _ = BringWindowToTop(hwnd);
     let _ = ShowWindow(hwnd, SW_SHOW);
     let _ = SetForegroundWindow(hwnd);
+    if window_is_foreground(hwnd) {
+        detach(attached_fg, attached_target, current_tid, fg_tid, target_tid);
+        return true;
+    }
+    SwitchToThisWindow(hwnd, true);
+    let focused = window_is_foreground(hwnd);
+    detach(attached_fg, attached_target, current_tid, fg_tid, target_tid);
+    focused
+}
 
+unsafe fn detach(
+    attached_fg: bool,
+    attached_target: bool,
+    current_tid: u32,
+    fg_tid: u32,
+    target_tid: u32,
+) {
     if attached_target {
         let _ = AttachThreadInput(current_tid, target_tid, false);
     }
     if attached_fg {
         let _ = AttachThreadInput(current_tid, fg_tid, false);
     }
-
-    window_is_foreground(hwnd)
 }
 
 unsafe fn window_is_foreground(hwnd: HWND) -> bool {

@@ -7,6 +7,7 @@ use crate::domain::{
 use crate::errors::AppError;
 
 pub const ACTIVE_WORKSPACE_KEY: &str = "active_workspace_id";
+pub const QUICK_SWITCH_SHORTCUT_KEY: &str = "quick_switch_shortcut";
 
 #[derive(Clone, Debug)]
 pub struct InstalledAppRow {
@@ -643,6 +644,74 @@ pub fn native_window_get_external_id(
         )
         .optional()?;
     Ok(row)
+}
+
+#[derive(Clone, Debug)]
+pub struct NativeWindowBinding {
+    pub id: String,
+    pub external_window_id: String,
+    pub process_id: Option<i64>,
+    pub process_path: Option<String>,
+    pub title: Option<String>,
+    pub status: String,
+}
+
+pub fn native_window_bound_external_ids(
+    conn: &Connection,
+    except_workspace_app_id: Option<&str>,
+) -> Result<Vec<String>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT nw.external_window_id
+         FROM native_windows nw
+         INNER JOIN workspace_apps wa ON wa.last_window_id = nw.id
+         WHERE wa.deleted_at IS NULL
+           AND nw.deleted_at IS NULL
+           AND nw.status = 'running'
+           AND (?1 IS NULL OR wa.id != ?1)",
+    )?;
+    let rows = stmt.query_map(params![except_workspace_app_id], |row| row.get(0))?;
+    collect_rows(rows)
+}
+
+pub fn native_window_get_binding(
+    conn: &Connection,
+    id: &str,
+) -> Result<Option<NativeWindowBinding>, AppError> {
+    let row = conn
+        .query_row(
+            "SELECT id, external_window_id, process_id, process_path, title, status
+             FROM native_windows
+             WHERE id = ?1 AND deleted_at IS NULL",
+            [id],
+            |row| {
+                Ok(NativeWindowBinding {
+                    id: row.get(0)?,
+                    external_window_id: row.get(1)?,
+                    process_id: row.get(2)?,
+                    process_path: row.get(3)?,
+                    title: row.get(4)?,
+                    status: row.get(5)?,
+                })
+            },
+        )
+        .optional()?;
+    Ok(row)
+}
+
+pub fn workspace_app_bind_window(
+    conn: &Connection,
+    id: &str,
+    last_window_id: &str,
+    status: &str,
+    now: &str,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE workspace_apps
+         SET last_window_id = ?1, status = ?2, last_focused_at = ?3, updated_at = ?3
+         WHERE id = ?4",
+        params![last_window_id, status, now, id],
+    )?;
+    Ok(())
 }
 
 pub fn native_window_mark_closed(conn: &Connection, id: &str, now: &str) -> Result<(), AppError> {

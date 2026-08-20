@@ -1,0 +1,1306 @@
+{
+  "schemaVersion": 1,
+  "project": "workspace-hub",
+  "projectVersion": "0.1.0",
+  "planId": "p0-remainder-and-p2",
+  "planName": "补齐剩余 P0 后进入 P2",
+  "createdAt": "2026-08-20",
+  "status": "in_progress",
+  "sourceOfTruth": "docs/dev-plan/p0-p2-flow.json",
+  "packageDir": "docs/dev-plan/packages/<pkg-id>",
+  "previousPlan": "docs/dev-plan/development-flow.json",
+  "relatedSpecs": [
+    "docs/product/workspace-manager-prd.md",
+    "docs/process/project-development-plan.md",
+    "docs/specs/engineering-standards-and-tech-stack.md",
+    "docs/specs/data-model-and-storage-spec.md",
+    "docs/specs/platform-adapter-spec.md",
+    "docs/specs/frontend-workspace-ui-spec.md",
+    "docs/specs/test-and-acceptance-plan.md",
+    "docs/dev-plan/folder-structure.md"
+  ],
+  "lockedDecisions": {
+    "skipP1": true,
+    "skipP1Note": "用户要求先做完剩余 P0，然后直接做 P2。窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、安装包先不做。",
+    "remainingP0": "quick_switch_and_configurable_shortcut",
+    "defaultShortcut": "Control+KeyO",
+    "shortcutMustBeConfigurable": true,
+    "embedIsOptIn": true,
+    "embedNote": "默认仍是切到真实窗口。内嵌只做 Windows 实验，失败回退聚焦。",
+    "activityObserveIsOptIn": true,
+    "activityObserveNote": "只记前台窗口标题、进程名和时间。不钩键盘，不读软件内部，不上传。",
+    "agentUsesCanvasOnly": true,
+    "syncFirstSliceIsExportImport": true,
+    "collabFirstSliceIsReadOnlyShare": true,
+    "pluginFirstSliceIsLocalOnly": true
+  },
+  "inScope": [
+    "可配置全局快捷键与注册失败反馈",
+    "快速切换面板：聚焦 / 重开 / 添加并打开",
+    "P0 剩余项联调与人工热键验收",
+    "同一软件多窗口列表与按窗口聚焦",
+    "macOS 真实扫描、启动、聚焦",
+    "可选的 Windows 窗口内嵌实验",
+    "可选的窗口标题活动观察",
+    "画布手动 AI 总结",
+    "基于画布的费曼学习 Agent",
+    "工作区导出导入",
+    "只读分享与本地评论",
+    "本机插件清单与白名单加载"
+  ],
+  "outOfScope": [
+    "P1：窗口截图预览、工作区别名编辑页、待办卡片、操作时间线手写增强、文件夹/URL/命令、工作区完整设置、白板导出单独产品化、Windows 安装包/签名/自动更新",
+    "默认强制内嵌全部软件",
+    "键盘钩子、剪贴板常驻、后台截屏、读取外部软件内部内容",
+    "自建云账号与实时 CRDT 同步",
+    "在线插件商店、付费、远程安装",
+    "Linux 平台适配"
+  ],
+  "executionRules": {
+    "singleImplementerOrder": [
+      "pkg-07-settings-and-shortcut",
+      "pkg-08-quick-switch-panel",
+      "pkg-09-p0-acceptance",
+      "pkg-10-multi-window",
+      "pkg-11-macos-platform",
+      "pkg-12-window-embed",
+      "pkg-13-activity-observe",
+      "pkg-14-ai-canvas-summary",
+      "pkg-15-feynman-agent",
+      "pkg-16-device-sync",
+      "pkg-17-collaboration",
+      "pkg-18-plugin-marketplace"
+    ],
+    "waves": [
+      {
+        "id": "wave-p0",
+        "packages": [
+          "pkg-07-settings-and-shortcut",
+          "pkg-08-quick-switch-panel",
+          "pkg-09-p0-acceptance"
+        ]
+      },
+      {
+        "id": "wave-p2-a",
+        "packages": [
+          "pkg-10-multi-window",
+          "pkg-11-macos-platform",
+          "pkg-14-ai-canvas-summary",
+          "pkg-16-device-sync",
+          "pkg-18-plugin-marketplace"
+        ]
+      },
+      {
+        "id": "wave-p2-b",
+        "packages": [
+          "pkg-12-window-embed",
+          "pkg-13-activity-observe",
+          "pkg-15-feynman-agent",
+          "pkg-17-collaboration"
+        ]
+      }
+    ],
+    "onePackageAtATimeForSingleAgent": true,
+    "doNotExpandScope": true,
+    "frontendNoPlatformDetails": true,
+    "commandsMustStaySemantic": true,
+    "p0BeforeP2": true,
+    "syncRule": "改开发包时先改 packages/<pkg-id>/pkg.json，再改该包 README.md，最后运行 python docs/dev-plan/assemble-p0-p2-flow.py 同步总控。"
+  },
+  "completionCriteria": [
+    "能在设置里改快捷键；注册失败有原因",
+    "快捷键或测试入口打开快速切换面板，三种动作可用",
+    "系统级热键由 Windows 人工清单确认，不用 hook 冒充",
+    "P2 各包按自身验收执行，默认不打开内嵌、观察、Agent 自动请求、插件"
+  ],
+  "packages": [
+    {
+      "id": "pkg-07-settings-and-shortcut",
+      "seq": 7,
+      "title": "全局设置与可配置快捷键",
+      "status": "completed",
+      "dependsOn": [
+        "pkg-06-integration-acceptance"
+      ],
+      "parallelWith": [],
+      "ownerHint": "数据与本地存储智能体 / 平台适配智能体",
+      "goal": "把快捷键写进本地设置，启动时注册，失败能看见原因。默认候选是 Ctrl+O，但必须能改。本包不画快速切换面板。",
+      "changeScope": {
+        "summary": "补设置读写 command、快捷键注册与冲突反馈。前端只做最小设置入口。不做 launcher 浮层。",
+        "allowedPaths": [
+          "src-tauri/Cargo.toml",
+          "src-tauri/Cargo.lock",
+          "src-tauri/src/lib.rs",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/src/errors.rs",
+          "src-tauri/src/platform/**",
+          "src-tauri/tauri.conf.json",
+          "src-tauri/tests/**",
+          "src/features/api/**",
+          "src/features/settings/**",
+          "src/lib/types.ts",
+          "src/lib/errors.ts",
+          "src/app/workspace-shell.tsx",
+          "src/features/apps/components/current-workspace-header.tsx",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src/features/canvas/components/**",
+          "src-tauri/src/platform/windows/app_launch.rs",
+          "src-tauri/src/platform/windows/window_ops.rs"
+        ],
+        "allowedChanges": [
+          "复用 app_settings，增加 get_app_settings / update_app_settings",
+          "快捷键字段记录用户值、注册状态、最近失败原因",
+          "接入 tauri-plugin-global-shortcut 或等价能力",
+          "启动和改设置时重新注册；冲突或系统拒绝返回结构化错误",
+          "默认候选 Ctrl+O，禁止写死为唯一值",
+          "前端最小设置弹窗：改快捷键、看注册状态、失败文案",
+          "快捷键触发只发业务事件，例如 quick-switch:open，不在 Rust 里搜软件"
+        ],
+        "forbiddenChanges": [
+          "实现快速切换搜索浮层",
+          "实现文件夹 / URL / 命令启动",
+          "实现窗口截图预览或软件内嵌",
+          "把 HWND 或系统热键句柄传到前端",
+          "用 Zustand persist 当设置的长期存储"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d07-settings",
+          "name": "设置读写",
+          "description": "get_app_settings / update_app_settings 读写全局设置；快捷键配置进 SQLite，重启仍在。"
+        },
+        {
+          "id": "d07-register",
+          "name": "快捷键注册",
+          "description": "按当前设置注册全局快捷键；成功、冲突、系统拒绝三种状态可区分。"
+        },
+        {
+          "id": "d07-settings-ui",
+          "name": "最小设置入口",
+          "description": "用户能改快捷键并看到是否注册成功。顶栏“工作区设置”不要再只打开重命名。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s07-01",
+          "title": "定义设置 DTO 与默认快捷键",
+          "status": "completed",
+          "doneWhen": "存在 AppSettings；quickSwitchShortcut 默认 Control+KeyO；含 registrationStatus 与 lastError。"
+        },
+        {
+          "id": "s07-02",
+          "title": "实现设置 repository / service / command",
+          "status": "completed",
+          "doneWhen": "读写走 app_settings；非法组合返回 VALIDATION；空值回落到默认。"
+        },
+        {
+          "id": "s07-03",
+          "title": "注册与注销全局快捷键",
+          "status": "completed",
+          "doneWhen": "启动按库中值注册；更新设置先注销再注册；失败不崩溃，状态可查。"
+        },
+        {
+          "id": "s07-04",
+          "title": "快捷键只发打开事件",
+          "status": "completed",
+          "doneWhen": "按下已注册组合后发出 quick-switch:open；Rust 不实现搜索和聚焦。"
+        },
+        {
+          "id": "s07-05",
+          "title": "最小设置弹窗",
+          "status": "completed",
+          "doneWhen": "能改快捷键、看到成功或冲突；设置走 settingsApi，组件不直接 invoke。"
+        },
+        {
+          "id": "s07-06",
+          "title": "补 Rust 与 Vitest",
+          "status": "completed",
+          "doneWhen": "默认值、非法快捷键、失败状态有测试。全局热键是否真正抢到系统级留给 pkg-09 人工清单。"
+        }
+      ],
+      "commands": [
+        "get_app_settings",
+        "update_app_settings"
+      ],
+      "acceptance": [
+        "重启后仍使用上次保存的快捷键",
+        "Ctrl+O 只是默认候选，设置里能改成别的组合",
+        "注册失败有明确文案，应用能继续用",
+        "本包 diff 里没有快速切换面板"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-07-settings-and-shortcut/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-07-settings-and-shortcut/README.md"
+      }
+    },
+    {
+      "id": "pkg-08-quick-switch-panel",
+      "seq": 8,
+      "title": "快速切换面板",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-07-settings-and-shortcut"
+      ],
+      "parallelWith": [],
+      "ownerHint": "前端工作区智能体",
+      "goal": "快捷键或测试入口打开轻量 launcher。按当前工作区软件、别名、备注、窗口标题过滤；键盘选择后聚焦、重开或添加并打开。",
+      "changeScope": {
+        "summary": "新增 quick-switch feature 和搜索浮层。复用现有 launch/focus/add command。不改 Windows 启动实现，不做别名编辑 UI。",
+        "allowedPaths": [
+          "src/features/quick-switch/**",
+          "src/features/api/**",
+          "src/features/apps/store/**",
+          "src/app/workspace-shell.tsx",
+          "src/lib/types.ts",
+          "src/lib/errors.ts",
+          "src/styles/**",
+          "src/test/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/domain/**"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/platform/windows/**",
+          "src/features/canvas/components/**"
+        ],
+        "allowedChanges": [
+          "创建 src/features/quick-switch/",
+          "监听 quick-switch:open 和面板内 Esc/点击遮罩关闭",
+          "结果区分：切换窗口、重新打开、添加并打开",
+          "默认先出当前工作区软件，再补软件库未加入项",
+          "匹配名称、别名、用途备注、最近窗口标题；别名/备注已有字段即可，本包不提供编辑入口",
+          "Enter 走已有 activate/reopen/addAndLaunch",
+          "测试按钮或 e2e hook 可打开面板，不依赖系统热键",
+          "若搜索需要服务端过滤，只允许新增 search_quick_switch，不得改启动/聚焦语义"
+        ],
+        "forbiddenChanges": [
+          "编辑工作区别名/备注的完整设置页（那是 P1）",
+          "窗口截图预览、软件内嵌",
+          "文件夹 / URL / 命令",
+          "前端出现 HWND 或全局热键注册细节",
+          "把中间区域改成外部软件容器"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d08-panel",
+          "name": "快速切换浮层",
+          "description": "打开后输入即过滤，方向键选择，Enter 执行，Esc 关闭。有稳定 data-testid。"
+        },
+        {
+          "id": "d08-actions",
+          "name": "三种结果动作",
+          "description": "运行中聚焦；已关闭提示重开；未加入则添加并打开。动作文案必须写清楚。"
+        },
+        {
+          "id": "d08-tests",
+          "name": "前端单测",
+          "description": "过滤、键盘选择、三种动作分发有 Vitest。系统热键是否生效放到 pkg-09。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s08-01",
+          "title": "实现 quick-switch store 与结果模型",
+          "status": "pending",
+          "doneWhen": "结果含 action：focus / reopen / addAndLaunch；不把平台 id 暴露给 UI。"
+        },
+        {
+          "id": "s08-02",
+          "title": "实现搜索浮层与键盘操作",
+          "status": "pending",
+          "doneWhen": "打开后焦点在输入框；上下选择；Enter 执行；Esc 关闭。"
+        },
+        {
+          "id": "s08-03",
+          "title": "接到现有启动/聚焦/添加",
+          "status": "pending",
+          "doneWhen": "三种动作只复用现有 store/API，不新写一套启动逻辑。"
+        },
+        {
+          "id": "s08-04",
+          "title": "监听快捷键事件与测试入口",
+          "status": "pending",
+          "doneWhen": "收到 quick-switch:open 打开面板；测试可用 hook 或按钮打开。"
+        },
+        {
+          "id": "s08-05",
+          "title": "补 Vitest",
+          "status": "pending",
+          "doneWhen": "名称/别名/备注/标题过滤和三种动作有测试。"
+        }
+      ],
+      "commands": [],
+      "acceptance": [
+        "无工作区时打开面板有明确空状态，不报错",
+        "已在工作区且窗口在，Enter 后走聚焦",
+        "窗口已关闭的结果显示重新打开",
+        "未加入软件显示添加并打开",
+        "前端不含平台热键注册代码"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-08-quick-switch-panel/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-08-quick-switch-panel/README.md"
+      }
+    },
+    {
+      "id": "pkg-09-p0-acceptance",
+      "seq": 9,
+      "title": "P0 剩余项联调与验收",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-07-settings-and-shortcut",
+        "pkg-08-quick-switch-panel"
+      ],
+      "parallelWith": [],
+      "ownerHint": "测试与验收智能体 / 主控",
+      "goal": "把设置、快捷键、快速切换收成可验收的 P0 闭环。自动测试覆盖面板，人工清单覆盖系统级热键。",
+      "changeScope": {
+        "summary": "允许为联调改胶水、文案、测试和验收文档。不借机做 P1/P2。",
+        "allowedPaths": [
+          "src/**",
+          "src-tauri/src/**",
+          "src-tauri/tests/**",
+          "tests/e2e/**",
+          "docs/dev-plan/**",
+          "docs/specs/test-and-acceptance-plan.md",
+          "playwright.config.ts",
+          "package.json"
+        ],
+        "forbiddenPaths": [],
+        "allowedChanges": [
+          "打通快捷键事件到面板再到聚焦/重开/添加",
+          "补 Playwright：测试钩子打开面板，不把 hook 当系统热键证据",
+          "补 Windows 人工清单：改快捷键、冲突、真按键切窗",
+          "修复 P0 剩余项缺口"
+        ],
+        "forbiddenChanges": [
+          "窗口截图预览、待办、时间线",
+          "文件夹 / URL / 命令",
+          "软件内嵌、macOS 真实现、Agent、同步、插件"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d09-e2e",
+          "name": "Playwright 快速切换",
+          "description": "用 hook 打开面板，覆盖过滤、Enter 聚焦、关闭项重开、未加入项添加并打开。"
+        },
+        {
+          "id": "d09-manual",
+          "name": "热键人工清单",
+          "description": "默认 Ctrl+O 或自定义组合；冲突提示；真按键能打开面板并切到外部窗口。"
+        },
+        {
+          "id": "d09-matrix",
+          "name": "自动 / 人工对照",
+          "description": "标明哪些是 mock/hook，哪些必须真人按键。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s09-01",
+          "title": "联调打开、过滤、三种动作",
+          "status": "pending",
+          "doneWhen": "从设置改快捷键到面板执行主路径可演示。"
+        },
+        {
+          "id": "s09-02",
+          "title": "补 Playwright",
+          "status": "pending",
+          "doneWhen": "e2e 用 hook 覆盖面板；文件头标明不是系统热键证据。"
+        },
+        {
+          "id": "s09-03",
+          "title": "补 Windows 人工清单",
+          "status": "pending",
+          "doneWhen": "存在可勾选清单：注册、冲突、真按键、切窗。"
+        },
+        {
+          "id": "s09-04",
+          "title": "标记 P0 剩余项完成",
+          "status": "pending",
+          "doneWhen": "本包与 07/08 在总控里可标 completed；下一轮进入 P2。"
+        }
+      ],
+      "acceptance": [
+        "P0 快捷键 + 快速切换可演示",
+        "报告分得清 hook 测试和真人热键",
+        "没有把 P1/P2 做进来"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-09-p0-acceptance/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-09-p0-acceptance/README.md"
+      }
+    },
+    {
+      "id": "pkg-10-multi-window",
+      "seq": 10,
+      "title": "同一软件的多窗口管理",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-09-p0-acceptance"
+      ],
+      "parallelWith": [
+        "pkg-11-macos-platform"
+      ],
+      "ownerHint": "平台适配智能体 / 前端工作区智能体",
+      "goal": "一个工作区软件可以绑定多个真实窗口，用户能按窗口标题选择聚焦，而不是只能切最近一个主窗口。",
+      "changeScope": {
+        "summary": "扩展 native_windows 与聚焦 API，让同一 workspace_app 可有多条窗口记录。前端增加窗口列表，不改启动器定位。",
+        "allowedPaths": [
+          "src-tauri/migrations/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/platform/**",
+          "src-tauri/tests/**",
+          "src/features/windows/**",
+          "src/features/apps/**",
+          "src/features/api/**",
+          "src/lib/types.ts",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src/features/agent/**",
+          "src/features/quick-switch/**"
+        ],
+        "allowedChanges": [
+          "同一 workspace_app 保存多条 native_windows",
+          "list_workspace_app_windows / focus_native_window",
+          "窗口标题、最近聚焦时间、是否仍有效",
+          "前端在卡片上展开窗口列表并选择聚焦",
+          "句柄失效标 WindowClosed，可重开软件但不假装窗口还在"
+        ],
+        "forbiddenChanges": [
+          "把外部窗口嵌进 WebView",
+          "自动读取软件内部文档",
+          "跨设备同步窗口句柄",
+          "把 HWND 明文传给前端"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d10-model",
+          "name": "多窗口数据",
+          "description": "一个 workspace_app 可对应多条不透明 NativeWindowId。"
+        },
+        {
+          "id": "d10-focus",
+          "name": "按窗口聚焦",
+          "description": "用户能从列表选最近的 Chrome 窗口，而不是只能碰主窗口。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s10-01",
+          "title": "扩展窗口绑定模型",
+          "status": "pending",
+          "doneWhen": "同一软件多窗口可落库，前端仍只见不透明 id。"
+        },
+        {
+          "id": "s10-02",
+          "title": "枚举并刷新当前软件窗口",
+          "status": "pending",
+          "doneWhen": "刷新时按进程/标题匹配，失效项标关闭。"
+        },
+        {
+          "id": "s10-03",
+          "title": "卡片上的窗口列表",
+          "status": "pending",
+          "doneWhen": "可展开、选择、聚焦；默认仍点卡片切最近窗口。"
+        },
+        {
+          "id": "s10-04",
+          "title": "测试",
+          "status": "pending",
+          "doneWhen": "Rust 覆盖多绑定与失效；前端覆盖列表选择。真桌面人工验。"
+        }
+      ],
+      "commands": [
+        "list_workspace_app_windows",
+        "focus_native_window"
+      ],
+      "acceptance": [
+        "同一软件两个窗口能分开列、分开切",
+        "关闭其中一个不影响另一个",
+        "默认点击卡片仍切最近窗口",
+        "前端看不到 HWND"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-10-multi-window/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-10-multi-window/README.md"
+      }
+    },
+    {
+      "id": "pkg-11-macos-platform",
+      "seq": 11,
+      "title": "macOS 扫描、启动与窗口聚焦",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-09-p0-acceptance"
+      ],
+      "parallelWith": [
+        "pkg-10-multi-window"
+      ],
+      "ownerHint": "平台适配智能体",
+      "goal": "用 macOS adapter 替换 mock：应用扫描、启动、枚举窗口、聚焦。业务 command 名称不变。窗口切换需要辅助功能权限，申请失败要说清楚。",
+      "changeScope": {
+        "summary": "只改 platform/macos 和装配。不重写工作区、白板、设置。不做 Linux。",
+        "allowedPaths": [
+          "src-tauri/src/platform/**",
+          "src-tauri/src/lib.rs",
+          "src-tauri/Cargo.toml",
+          "src-tauri/Cargo.lock",
+          "src-tauri/tauri.conf.json",
+          "src-tauri/tests/**",
+          "src/features/settings/**",
+          "docs/dev-plan/packages/pkg-11-macos-platform/**"
+        ],
+        "forbiddenPaths": [
+          "src/features/canvas/components/**",
+          "src-tauri/migrations/**"
+        ],
+        "allowedChanges": [
+          "实现 macOS 应用扫描、启动、窗口枚举、聚焦、图标",
+          "辅助功能权限检测与用户说明",
+          "cfg(target_os = \"macos\") 默认走 macOS adapter",
+          "原生测试用显式开关，不进默认 cargo test"
+        ],
+        "forbiddenChanges": [
+          "改 command 名称或前端业务语义",
+          "实现软件内嵌",
+          "实现 Linux adapter",
+          "把 AXUIElement 细节传到前端"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d11-adapter",
+          "name": "macOS adapter",
+          "description": "scan / launch / list_windows / focus / resolve_manual_target 有真实实现。"
+        },
+        {
+          "id": "d11-permission",
+          "name": "权限说明",
+          "description": "未授权辅助功能时，聚焦失败原因可读，并告诉用户去系统设置。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s11-01",
+          "title": "macOS adapter 骨架并装配",
+          "status": "pending",
+          "doneWhen": "macOS 默认走真实 adapter；测试仍可注入 mock。"
+        },
+        {
+          "id": "s11-02",
+          "title": "扫描与启动",
+          "status": "pending",
+          "doneWhen": "能扫到常见 .app；能启动；坏路径结构化失败。"
+        },
+        {
+          "id": "s11-03",
+          "title": "窗口枚举与聚焦",
+          "status": "pending",
+          "doneWhen": "有权限可置前；无权限 FocusDenied；窗口没了 WindowClosed。"
+        },
+        {
+          "id": "s11-04",
+          "title": "隔离原生测试与人工清单",
+          "status": "pending",
+          "doneWhen": "默认 cargo test 不碰真实桌面；存在 macOS 人工清单。"
+        }
+      ],
+      "acceptance": [
+        "Windows 路径不受影响",
+        "前端仍只调业务 command",
+        "无辅助功能权限时不假装聚焦成功"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-11-macos-platform/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-11-macos-platform/README.md"
+      }
+    },
+    {
+      "id": "pkg-12-window-embed",
+      "seq": 12,
+      "title": "可选的外部窗口内嵌（实验）",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-10-multi-window"
+      ],
+      "parallelWith": [],
+      "ownerHint": "平台适配智能体 / 前端工作区智能体",
+      "goal": "给单个用户选中的窗口提供可选内嵌预览宿主。默认路径仍是切到真实窗口。内嵌失败必须回退到聚焦，不能假装软件在产品里运行。",
+      "changeScope": {
+        "summary": "Windows 上做 opt-in 的 HWND 宿主实验。默认不开启。产品定位仍是工作区管理器，不是虚拟桌面。",
+        "allowedPaths": [
+          "src-tauri/src/platform/windows/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/domain/**",
+          "src/features/windows/**",
+          "src/features/apps/**",
+          "src/features/api/**",
+          "src/app/workspace-shell.tsx",
+          "src/lib/types.ts",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src/features/agent/**",
+          "src/features/canvas/components/**"
+        ],
+        "allowedChanges": [
+          "每个 workspace_app 增加 embedEnabled，默认 false",
+          "Windows 尝试把用户选中的窗口放到本产品客户区",
+          "失败（权限、所有者、UWP、管理员窗口）回退 focus_workspace_app",
+          "文案使用“在本窗口预览”，禁止“内置浏览器 / 在此操作外部软件”",
+          "用户可随时退出内嵌，窗口回到独立状态"
+        ],
+        "forbiddenChanges": [
+          "默认内嵌所有软件",
+          "把中间区域改成唯一工作面",
+          "读取软件内部文档或注入输入",
+          "macOS 内嵌（本包只做 Windows 实验）",
+          "把 HWND 数字暴露给前端业务层"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d12-opt-in",
+          "name": "按软件开关",
+          "description": "只有用户打开“在本窗口预览”的软件才尝试内嵌。"
+        },
+        {
+          "id": "d12-fallback",
+          "name": "失败回退",
+          "description": "内嵌不了就切到真实窗口，并说明原因。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s12-01",
+          "title": "数据开关与 command",
+          "status": "pending",
+          "doneWhen": "embedEnabled 默认 false；有 set_workspace_app_embed。"
+        },
+        {
+          "id": "s12-02",
+          "title": "Windows 宿主实验",
+          "status": "pending",
+          "doneWhen": "选中窗口可尝试放入客户区；不支持的类型立即失败。"
+        },
+        {
+          "id": "s12-03",
+          "title": "退出与回退",
+          "status": "pending",
+          "doneWhen": "关闭预览后窗口独立存在；失败走聚焦。"
+        },
+        {
+          "id": "s12-04",
+          "title": "人工验收",
+          "status": "pending",
+          "doneWhen": "记事本可试；浏览器/Electron/管理员窗口的失败被记录，不装成功。"
+        }
+      ],
+      "commands": [
+        "set_workspace_app_embed",
+        "embed_workspace_app_window",
+        "release_embedded_window"
+      ],
+      "acceptance": [
+        "默认工作流仍是点卡片切外部窗口",
+        "未打开开关的软件绝不被嵌入",
+        "内嵌失败有原因并回退聚焦",
+        "不读取外部软件内部内容"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-12-window-embed/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-12-window-embed/README.md"
+      }
+    },
+    {
+      "id": "pkg-13-activity-observe",
+      "seq": 13,
+      "title": "可选的窗口活动观察",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-10-multi-window"
+      ],
+      "parallelWith": [
+        "pkg-14-ai-canvas-summary"
+      ],
+      "ownerHint": "平台适配智能体 / 数据与本地存储智能体",
+      "goal": "在用户打开开关后，只记录已经能从窗口枚举看到的变化：前台应用、窗口标题、聚焦时间。不读文档、不记键盘、不注入。",
+      "changeScope": {
+        "summary": "opt-in 的窗口元数据观察，写入本地活动记录。这不是键鼠监听，也不是软件内部探针。",
+        "allowedPaths": [
+          "src-tauri/migrations/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/platform/**",
+          "src/features/activity-log/**",
+          "src/features/settings/**",
+          "src/features/api/**",
+          "src/lib/types.ts",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src/features/agent/**"
+        ],
+        "allowedChanges": [
+          "全局或按工作区的 observeActivity 开关，默认 false",
+          "低频轮询或系统前台窗口变化：标题、进程名、时间",
+          "写入 activity_events，仅本地",
+          "右侧时间线只展示用户同意收集的这些事件",
+          "随时关闭开关并停止观察"
+        ],
+        "forbiddenChanges": [
+          "键盘钩子、剪贴板常驻监听、截屏常驻",
+          "读取外部软件文档、网页、编辑器缓冲区",
+          "把观察数据上传到任何服务器",
+          "默认打开观察"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d13-opt-in",
+          "name": "默认关闭的观察开关",
+          "description": "设置里说明只记窗口标题和切换时间，不记击键和文件内容。"
+        },
+        {
+          "id": "d13-timeline",
+          "name": "本地活动时间线",
+          "description": "打开开关后，右侧能看到“10:30 切到 Chrome”。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s13-01",
+          "title": "开关与隐私文案",
+          "status": "pending",
+          "doneWhen": "默认关；文案写明观察范围和不做的事。"
+        },
+        {
+          "id": "s13-02",
+          "title": "窗口元数据采样",
+          "status": "pending",
+          "doneWhen": "只采样前台窗口标题/进程/时间，有节流。"
+        },
+        {
+          "id": "s13-03",
+          "title": "本地时间线展示",
+          "status": "pending",
+          "doneWhen": "activity-log feature 只读本地事件；关闭开关立即停止写入。"
+        },
+        {
+          "id": "s13-04",
+          "title": "测试与审查",
+          "status": "pending",
+          "doneWhen": "默认关有测试；diff 里没有键盘钩子或网络上报。"
+        }
+      ],
+      "commands": [
+        "get_activity_settings",
+        "update_activity_settings",
+        "list_activity_events"
+      ],
+      "acceptance": [
+        "新安装默认不观察",
+        "关闭后不再写新事件",
+        "事件不含键鼠内容和文档正文",
+        "没有任何上传逻辑"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-13-activity-observe/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-13-activity-observe/README.md"
+      }
+    },
+    {
+      "id": "pkg-14-ai-canvas-summary",
+      "seq": 14,
+      "title": "画布内容的手动 AI 总结",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-09-p0-acceptance"
+      ],
+      "parallelWith": [
+        "pkg-13-activity-observe"
+      ],
+      "ownerHint": "白板 Canvas 智能体 / 数据与本地存储智能体",
+      "goal": "用户手动触发后，只根据当前工作区画布上的 Markdown、图片标题和连线生成一份可编辑总结。不读外部软件，不默认自动请求模型。",
+      "changeScope": {
+        "summary": "先做画布上下文抽取、provider 配置、手动总结 command 和一张可撤销的总结卡片。不做费曼问答，不监听外部软件。",
+        "allowedPaths": [
+          "src-tauri/migrations/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/errors.rs",
+          "src/features/canvas/**",
+          "src/features/settings/**",
+          "src/features/api/**",
+          "src/lib/types.ts",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/platform/windows/**",
+          "src/features/quick-switch/**"
+        ],
+        "allowedChanges": [
+          "抽取当前选中节点、当前视口或整张画布的文本上下文",
+          "用户配置 LLM provider / API key，密钥不进白板表、不进日志",
+          "summarize_canvas 手动触发，生成 markdown 卡片",
+          "结果可编辑、可删除、可视为普通白板卡片",
+          "没配置 provider 时给出设置指引，不静默失败"
+        ],
+        "forbiddenChanges": [
+          "输入时自动请求模型",
+          "读取外部软件内部内容",
+          "实现费曼追问循环（放到 pkg-15）",
+          "把密钥写进 canvas_nodes"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d14-context",
+          "name": "画布上下文抽取",
+          "description": "可选择当前节点 / 视口 / 全画布，输出稳定的文本包。"
+        },
+        {
+          "id": "d14-summary",
+          "name": "手动总结卡片",
+          "description": "一次点击生成一张可编辑 Markdown 卡片，失败可重试。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s14-01",
+          "title": "上下文抽取格式",
+          "status": "pending",
+          "doneWhen": "只含用户放进画布的标题、正文、图片说明和连线，不含软件内部内容。"
+        },
+        {
+          "id": "s14-02",
+          "title": "provider 与密钥设置",
+          "status": "pending",
+          "doneWhen": "设置可保存；密钥不进白板；未配置时有说明。"
+        },
+        {
+          "id": "s14-03",
+          "title": "手动 summarize_canvas",
+          "status": "pending",
+          "doneWhen": "生成卡片并自动保存；失败保留原文案。"
+        },
+        {
+          "id": "s14-04",
+          "title": "测试",
+          "status": "pending",
+          "doneWhen": "抽取范围、未配置 provider、生成卡片有测试。可用 mock provider。"
+        }
+      ],
+      "commands": [
+        "get_ai_settings",
+        "update_ai_settings",
+        "summarize_canvas"
+      ],
+      "acceptance": [
+        "默认不请求任何模型",
+        "总结只来自画布",
+        "生成结果是普通可编辑卡片",
+        "密钥不出现在画布数据和日志里"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-14-ai-canvas-summary/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-14-ai-canvas-summary/README.md"
+      }
+    },
+    {
+      "id": "pkg-15-feynman-agent",
+      "seq": 15,
+      "title": "基于画布的费曼学习 Agent",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-14-ai-canvas-summary"
+      ],
+      "parallelWith": [],
+      "ownerHint": "白板 Canvas 智能体",
+      "goal": "根据画布材料生成追问、复述检查、概念拆解和知识缺口。输出是可撤销的建议卡片，不是替用户自动总结一切。",
+      "changeScope": {
+        "summary": "在 pkg-14 的上下文和 provider 上加费曼交互。默认手动触发，可选防抖，不读外部软件。",
+        "allowedPaths": [
+          "src/features/agent/**",
+          "src/features/canvas/**",
+          "src/features/settings/**",
+          "src/features/api/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/migrations/**",
+          "src/lib/types.ts",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/platform/**"
+        ],
+        "allowedChanges": [
+          "创建 src/features/agent/",
+          "run_feynman_session：输入画布范围，输出提问/复述检查/反例/缺口",
+          "建议以可编辑卡片落回画布，用户可丢弃",
+          "手动触发为默认；防抖实时只分析选中节点或视口",
+          "每次调用的范围和结果对用户可见"
+        ],
+        "forbiddenChanges": [
+          "读取外部软件内部内容",
+          "每次击键都请求模型",
+          "自动覆盖用户原卡片",
+          "接入插件市场"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d15-session",
+          "name": "费曼会话",
+          "description": "一次运行产生追问和复述检查，而不是又一份摘要。"
+        },
+        {
+          "id": "d15-cards",
+          "name": "可撤销建议卡片",
+          "description": "结果进画布后仍是普通卡片，删掉即撤销。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s15-01",
+          "title": "提示词与响应结构",
+          "status": "pending",
+          "doneWhen": "输出分追问、复述、拆解、缺口，而不是一段 summary。"
+        },
+        {
+          "id": "s15-02",
+          "title": "手动会话 command",
+          "status": "pending",
+          "doneWhen": "可指定选中节点 / 视口 / 全画布。"
+        },
+        {
+          "id": "s15-03",
+          "title": "建议落盘为卡片",
+          "status": "pending",
+          "doneWhen": "卡片可编辑删除；不覆盖原文。"
+        },
+        {
+          "id": "s15-04",
+          "title": "可选防抖触发",
+          "status": "pending",
+          "doneWhen": "默认关；打开后只对选中或视口防抖，不每次输入都请求。"
+        }
+      ],
+      "commands": [
+        "run_feynman_session"
+      ],
+      "acceptance": [
+        "输入只来自画布",
+        "输出是学习交互，不是又一篇摘要",
+        "用户能删掉建议卡片",
+        "默认不自动请求"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-15-feynman-agent/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-15-feynman-agent/README.md"
+      }
+    },
+    {
+      "id": "pkg-16-device-sync",
+      "seq": 16,
+      "title": "工作区导出导入与本机同步准备",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-09-p0-acceptance"
+      ],
+      "parallelWith": [
+        "pkg-15-feynman-agent"
+      ],
+      "ownerHint": "数据与本地存储智能体",
+      "goal": "先做出可审查的工作区包导出/导入和冲突报告。不自建云账号，不在本包做实时多端同步。",
+      "changeScope": {
+        "summary": "导出当前工作区的软件关联、白板和资源引用；另一台机器可导入。冲突只报告，不自动合并业务对象。",
+        "allowedPaths": [
+          "src-tauri/src/commands/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/tests/**",
+          "src/features/workspaces/**",
+          "src/features/api/**",
+          "src/lib/types.ts",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/platform/windows/window_ops.rs",
+          "src/features/agent/**"
+        ],
+        "allowedChanges": [
+          "export_workspace 打出本地包：元数据、软件关联、画布、assets 文件",
+          "import_workspace 生成新工作区或写入指定工作区",
+          "冲突清单：同名工作区、缺失启动路径、缺失图片",
+          "导出不含 LLM 密钥和全局快捷键以外的本机路径机密时需脱敏说明",
+          "导入不卸载、不关闭真实软件"
+        ],
+        "forbiddenChanges": [
+          "自建同步服务器或强制登录账号",
+          "CRDT 实时同步",
+          "多人同时编辑",
+          "把 HWND 或本机绝对密钥写进导出包"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d16-export",
+          "name": "工作区导出包",
+          "description": "一个工作区可打成本地文件，含白板资源和软件关联。"
+        },
+        {
+          "id": "d16-import",
+          "name": "导入与冲突报告",
+          "description": "导入后给出能打开和打不开的项，不假装软件一定存在。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s16-01",
+          "title": "导出格式",
+          "status": "pending",
+          "doneWhen": "格式有版本号；含工作区、软件关联、画布、资源。"
+        },
+        {
+          "id": "s16-02",
+          "title": "导入与隔离",
+          "status": "pending",
+          "doneWhen": "导入生成独立工作区，不覆盖未选择的本地数据。"
+        },
+        {
+          "id": "s16-03",
+          "title": "冲突与缺失路径",
+          "status": "pending",
+          "doneWhen": "另一台电脑没有对应 exe 时标不可用，允许稍后手动指定。"
+        },
+        {
+          "id": "s16-04",
+          "title": "测试",
+          "status": "pending",
+          "doneWhen": "导出再导入后白板和关联仍在；密钥不进包。"
+        }
+      ],
+      "commands": [
+        "export_workspace",
+        "import_workspace"
+      ],
+      "acceptance": [
+        "导出导入不经过自建云",
+        "导入不覆盖其他工作区",
+        "缺失软件只标不可用",
+        "包里没有密钥和 HWND"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-16-device-sync/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-16-device-sync/README.md"
+      }
+    },
+    {
+      "id": "pkg-17-collaboration",
+      "seq": 17,
+      "title": "工作区只读分享与评论",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-16-device-sync"
+      ],
+      "parallelWith": [],
+      "ownerHint": "数据与本地存储智能体 / 前端工作区智能体",
+      "goal": "在导出包之上做最小协作：只读分享和画布评论。不做实时光标、权限系统和多人同时编辑。",
+      "changeScope": {
+        "summary": "导入的只读工作区可浏览软件列表和白板，可在节点上留本地评论。评论不写回对方机器，除非再次导出。",
+        "allowedPaths": [
+          "src-tauri/migrations/**",
+          "src-tauri/src/**",
+          "src/features/workspaces/**",
+          "src/features/canvas/**",
+          "src/features/api/**",
+          "src/lib/types.ts",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/platform/windows/app_launch.rs"
+        ],
+        "allowedChanges": [
+          "工作区标记 sharedReadOnly",
+          "只读工作区禁止改软件关联和删除源卡片，允许本地评论",
+          "评论落在本地 SQLite",
+          "再次导出时可带上评论"
+        ],
+        "forbiddenChanges": [
+          "WebSocket 实时协作",
+          "在线账号与权限矩阵",
+          "同时编辑同一节点的 OT/CRDT",
+          "插件市场"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d17-readonly",
+          "name": "只读分享工作区",
+          "description": "导入后能看软件和白板，不能当自己的可写副本误改源语义。"
+        },
+        {
+          "id": "d17-comments",
+          "name": "本地评论",
+          "description": "可在卡片上留评论，再次导出时带走。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s17-01",
+          "title": "只读标记与 UI 禁用",
+          "status": "pending",
+          "doneWhen": "只读工作区不能删源卡片、不能移出对方软件关联。"
+        },
+        {
+          "id": "s17-02",
+          "title": "节点评论",
+          "status": "pending",
+          "doneWhen": "评论存本地，属于节点，不属于全局聊天。"
+        },
+        {
+          "id": "s17-03",
+          "title": "导出带走评论",
+          "status": "pending",
+          "doneWhen": "再导出的包含评论；对方导入看得到。"
+        }
+      ],
+      "commands": [
+        "list_canvas_comments",
+        "add_canvas_comment",
+        "delete_canvas_comment"
+      ],
+      "acceptance": [
+        "只读工作区改不了源白板节点",
+        "没有实时多人光标",
+        "评论只存在本地，除非再次导出"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-17-collaboration/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-17-collaboration/README.md"
+      }
+    },
+    {
+      "id": "pkg-18-plugin-marketplace",
+      "seq": 18,
+      "title": "本地插件清单与加载",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-09-p0-acceptance"
+      ],
+      "parallelWith": [
+        "pkg-16-device-sync"
+      ],
+      "ownerHint": "工程基础 / 主控",
+      "goal": "先做本机插件清单、权限声明和加载。不做在线商店、付费和远程安装。插件不能直接碰 HWND 或用户密钥。",
+      "changeScope": {
+        "summary": "定义 plugin manifest、本机目录扫描、显式启用。插件只能走白名单 command，不能自己扫盘或钩窗口。",
+        "allowedPaths": [
+          "src-tauri/src/plugins/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/migrations/**",
+          "src/features/settings/**",
+          "src/features/api/**",
+          "src/lib/types.ts",
+          "src/test/**",
+          "docs/dev-plan/packages/pkg-18-plugin-marketplace/**"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/platform/windows/window_ops.rs",
+          "src-tauri/src/platform/windows/app_launch.rs"
+        ],
+        "allowedChanges": [
+          "plugin.json：id、名称、版本、权限、入口",
+          "扫描本机 plugins 目录，默认全关",
+          "list_plugins / set_plugin_enabled",
+          "白名单能力：读当前工作区摘要、往画布加卡片、打开设置页",
+          "插件进程或脚本与主进程隔离，崩溃不影响主窗口"
+        ],
+        "forbiddenChanges": [
+          "在线市场、账号、付费、自动更新插件",
+          "插件直接调用 Win32 / Accessibility",
+          "插件读取 LLM 密钥",
+          "远程下载并执行未审查代码"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d18-manifest",
+          "name": "插件清单格式",
+          "description": "一个目录一个插件，有权限声明。"
+        },
+        {
+          "id": "d18-toggle",
+          "name": "本机启用开关",
+          "description": "设置里能看到插件，默认关闭，用户自己打开。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s18-01",
+          "title": "manifest 与目录约定",
+          "status": "pending",
+          "doneWhen": "文档写清目录、字段、权限枚举。"
+        },
+        {
+          "id": "s18-02",
+          "title": "扫描与启用",
+          "status": "pending",
+          "doneWhen": "坏 manifest 被跳过并记录；默认不启用。"
+        },
+        {
+          "id": "s18-03",
+          "title": "白名单调用",
+          "status": "pending",
+          "doneWhen": "插件只能打声明过的能力，越权失败。"
+        },
+        {
+          "id": "s18-04",
+          "title": "示例插件与测试",
+          "status": "pending",
+          "doneWhen": "仓库内有一个只往画布加卡片的示例；越权有测试。"
+        }
+      ],
+      "commands": [
+        "list_plugins",
+        "set_plugin_enabled"
+      ],
+      "acceptance": [
+        "没有在线商店",
+        "默认不加载任何插件",
+        "插件碰不到 HWND 和密钥",
+        "坏插件不能把主进程打挂"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-18-plugin-marketplace/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-18-plugin-marketplace/README.md"
+      }
+    }
+  ],
+  "folderStructure": "docs/dev-plan/folder-structure.md"
+}

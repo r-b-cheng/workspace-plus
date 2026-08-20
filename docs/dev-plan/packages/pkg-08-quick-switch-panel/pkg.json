@@ -1,0 +1,110 @@
+{
+  "id": "pkg-08-quick-switch-panel",
+  "seq": 8,
+  "title": "快速切换面板",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-07-settings-and-shortcut"
+  ],
+  "parallelWith": [],
+  "ownerHint": "前端工作区智能体",
+  "goal": "快捷键或测试入口打开轻量 launcher。按当前工作区软件、别名、备注、窗口标题过滤；键盘选择后聚焦、重开或添加并打开。",
+  "changeScope": {
+    "summary": "新增 quick-switch feature 和搜索浮层。复用现有 launch/focus/add command。不改 Windows 启动实现，不做别名编辑 UI。",
+    "allowedPaths": [
+      "src/features/quick-switch/**",
+      "src/features/api/**",
+      "src/features/apps/store/**",
+      "src/app/workspace-shell.tsx",
+      "src/lib/types.ts",
+      "src/lib/errors.ts",
+      "src/styles/**",
+      "src/test/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/domain/**"
+    ],
+    "forbiddenPaths": [
+      "src-tauri/src/platform/windows/**",
+      "src/features/canvas/components/**"
+    ],
+    "allowedChanges": [
+      "创建 src/features/quick-switch/",
+      "监听 quick-switch:open 和面板内 Esc/点击遮罩关闭",
+      "结果区分：切换窗口、重新打开、添加并打开",
+      "默认先出当前工作区软件，再补软件库未加入项",
+      "匹配名称、别名、用途备注、最近窗口标题；别名/备注已有字段即可，本包不提供编辑入口",
+      "Enter 走已有 activate/reopen/addAndLaunch",
+      "测试按钮或 e2e hook 可打开面板，不依赖系统热键",
+      "若搜索需要服务端过滤，只允许新增 search_quick_switch，不得改启动/聚焦语义"
+    ],
+    "forbiddenChanges": [
+      "编辑工作区别名/备注的完整设置页（那是 P1）",
+      "窗口截图预览、软件内嵌",
+      "文件夹 / URL / 命令",
+      "前端出现 HWND 或全局热键注册细节",
+      "把中间区域改成外部软件容器"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d08-panel",
+      "name": "快速切换浮层",
+      "description": "打开后输入即过滤，方向键选择，Enter 执行，Esc 关闭。有稳定 data-testid。"
+    },
+    {
+      "id": "d08-actions",
+      "name": "三种结果动作",
+      "description": "运行中聚焦；已关闭提示重开；未加入则添加并打开。动作文案必须写清楚。"
+    },
+    {
+      "id": "d08-tests",
+      "name": "前端单测",
+      "description": "过滤、键盘选择、三种动作分发有 Vitest。系统热键是否生效放到 pkg-09。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s08-01",
+      "title": "实现 quick-switch store 与结果模型",
+      "status": "pending",
+      "doneWhen": "结果含 action：focus / reopen / addAndLaunch；不把平台 id 暴露给 UI。"
+    },
+    {
+      "id": "s08-02",
+      "title": "实现搜索浮层与键盘操作",
+      "status": "pending",
+      "doneWhen": "打开后焦点在输入框；上下选择；Enter 执行；Esc 关闭。"
+    },
+    {
+      "id": "s08-03",
+      "title": "接到现有启动/聚焦/添加",
+      "status": "pending",
+      "doneWhen": "三种动作只复用现有 store/API，不新写一套启动逻辑。"
+    },
+    {
+      "id": "s08-04",
+      "title": "监听快捷键事件与测试入口",
+      "status": "pending",
+      "doneWhen": "收到 quick-switch:open 打开面板；测试可用 hook 或按钮打开。"
+    },
+    {
+      "id": "s08-05",
+      "title": "补 Vitest",
+      "status": "pending",
+      "doneWhen": "名称/别名/备注/标题过滤和三种动作有测试。"
+    }
+  ],
+  "commands": [],
+  "acceptance": [
+    "无工作区时打开面板有明确空状态，不报错",
+    "已在工作区且窗口在，Enter 后走聚焦",
+    "窗口已关闭的结果显示重新打开",
+    "未加入软件显示添加并打开",
+    "前端不含平台热键注册代码"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-08-quick-switch-panel/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-08-quick-switch-panel/README.md"
+  }
+}

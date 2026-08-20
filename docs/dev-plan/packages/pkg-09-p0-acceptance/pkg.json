@@ -1,0 +1,90 @@
+{
+  "id": "pkg-09-p0-acceptance",
+  "seq": 9,
+  "title": "P0 剩余项联调与验收",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-07-settings-and-shortcut",
+    "pkg-08-quick-switch-panel"
+  ],
+  "parallelWith": [],
+  "ownerHint": "测试与验收智能体 / 主控",
+  "goal": "把设置、快捷键、快速切换收成可验收的 P0 闭环。自动测试覆盖面板，人工清单覆盖系统级热键。",
+  "changeScope": {
+    "summary": "允许为联调改胶水、文案、测试和验收文档。不借机做 P1/P2。",
+    "allowedPaths": [
+      "src/**",
+      "src-tauri/src/**",
+      "src-tauri/tests/**",
+      "tests/e2e/**",
+      "docs/dev-plan/**",
+      "docs/specs/test-and-acceptance-plan.md",
+      "playwright.config.ts",
+      "package.json"
+    ],
+    "forbiddenPaths": [],
+    "allowedChanges": [
+      "打通快捷键事件到面板再到聚焦/重开/添加",
+      "补 Playwright：测试钩子打开面板，不把 hook 当系统热键证据",
+      "补 Windows 人工清单：改快捷键、冲突、真按键切窗",
+      "修复 P0 剩余项缺口"
+    ],
+    "forbiddenChanges": [
+      "窗口截图预览、待办、时间线",
+      "文件夹 / URL / 命令",
+      "软件内嵌、macOS 真实现、Agent、同步、插件"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d09-e2e",
+      "name": "Playwright 快速切换",
+      "description": "用 hook 打开面板，覆盖过滤、Enter 聚焦、关闭项重开、未加入项添加并打开。"
+    },
+    {
+      "id": "d09-manual",
+      "name": "热键人工清单",
+      "description": "默认 Ctrl+O 或自定义组合；冲突提示；真按键能打开面板并切到外部窗口。"
+    },
+    {
+      "id": "d09-matrix",
+      "name": "自动 / 人工对照",
+      "description": "标明哪些是 mock/hook，哪些必须真人按键。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s09-01",
+      "title": "联调打开、过滤、三种动作",
+      "status": "pending",
+      "doneWhen": "从设置改快捷键到面板执行主路径可演示。"
+    },
+    {
+      "id": "s09-02",
+      "title": "补 Playwright",
+      "status": "pending",
+      "doneWhen": "e2e 用 hook 覆盖面板；文件头标明不是系统热键证据。"
+    },
+    {
+      "id": "s09-03",
+      "title": "补 Windows 人工清单",
+      "status": "pending",
+      "doneWhen": "存在可勾选清单：注册、冲突、真按键、切窗。"
+    },
+    {
+      "id": "s09-04",
+      "title": "标记 P0 剩余项完成",
+      "status": "pending",
+      "doneWhen": "本包与 07/08 在总控里可标 completed；下一轮进入 P2。"
+    }
+  ],
+  "acceptance": [
+    "P0 快捷键 + 快速切换可演示",
+    "报告分得清 hook 测试和真人热键",
+    "没有把 P1/P2 做进来"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-09-p0-acceptance/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-09-p0-acceptance/README.md"
+  }
+}

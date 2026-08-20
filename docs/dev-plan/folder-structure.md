@@ -43,19 +43,19 @@ docs/
 docs/dev-plan/
   README.md
   folder-structure.md
-  development-flow.json
+  development-flow.json          已完成的竖切
+  p0-p2-flow.json                当前总控：剩余 P0 + P2
+  assemble-p0-p2-flow.py
   packages/
     pkg-01-engineering-foundation/
       pkg.json
       README.md
-    pkg-02-storage-and-commands/
-    pkg-03-frontend-workspace/
-    pkg-04-whiteboard-canvas/
-    pkg-05-windows-platform/
-    pkg-06-integration-acceptance/
+    pkg-07-settings-and-shortcut/
+    pkg-08-quick-switch-panel/
+    ...
 ```
 
-改包时先改该包 `pkg.json`，再改该包 `README.md`，最后同步 `development-flow.json`。
+改当前包时先改该包 `pkg.json`，再改该包 `README.md`，最后运行 `python docs/dev-plan/assemble-p0-p2-flow.py`。
 
 ## 前端 `src/`
 
@@ -71,7 +71,10 @@ src/
     apps/               软件库、添加、标签、卡片
     windows/            窗口状态展示（不写 HWND）
     canvas/             白板
-    activity-log/       预留，第一版不做
+    settings/           pkg-07 起：全局设置与快捷键
+    quick-switch/       pkg-08 起：快速切换面板
+    activity-log/       pkg-13 起：可选窗口活动
+    agent/              pkg-15 起：费曼学习
   lib/                  跨 feature 类型和工具
   styles/               全局样式入口
   test/                 Vitest 辅助
@@ -131,14 +134,14 @@ src-tauri/tests/        Rust 集成，默认不启真实 GUI
 
 Windows 原生测试必须显式开关，例如 `WINDOWS_NATIVE_TESTS=1`。不要和默认 `cargo test` 混在一起。
 
-## 第一版明确不建的目录
+## 需要时再开、现在不要提前建的目录
 
-不要提前建这些，避免空壳变成堆放处：
+对应开发包开始时再创建，避免空壳变成堆放处：
 
-- `src/features/quick-switch/`
-- `src/features/agent/`
-- `src-tauri/src/platform/linux/`
-- `plugins/`
-- 顶层 `ai/`、`scripts/windows-hacks/`
-
-需要时再开目录，并写清归属。
+- `src/features/settings/`：pkg-07
+- `src/features/quick-switch/`：pkg-08
+- `src/features/activity-log/`：pkg-13
+- `src/features/agent/`：pkg-15
+- `src-tauri/src/plugins/`：pkg-18
+- `src-tauri/src/platform/linux/`：仍不做
+- 顶层 `ai/`、`scripts/windows-hacks/`：不要建

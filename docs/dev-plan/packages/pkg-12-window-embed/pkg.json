@@ -1,0 +1,98 @@
+{
+  "id": "pkg-12-window-embed",
+  "seq": 12,
+  "title": "可选的外部窗口内嵌（实验）",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-10-multi-window"
+  ],
+  "parallelWith": [],
+  "ownerHint": "平台适配智能体 / 前端工作区智能体",
+  "goal": "给单个用户选中的窗口提供可选内嵌预览宿主。默认路径仍是切到真实窗口。内嵌失败必须回退到聚焦，不能假装软件在产品里运行。",
+  "changeScope": {
+    "summary": "Windows 上做 opt-in 的 HWND 宿主实验。默认不开启。产品定位仍是工作区管理器，不是虚拟桌面。",
+    "allowedPaths": [
+      "src-tauri/src/platform/windows/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/domain/**",
+      "src/features/windows/**",
+      "src/features/apps/**",
+      "src/features/api/**",
+      "src/app/workspace-shell.tsx",
+      "src/lib/types.ts",
+      "src/test/**"
+    ],
+    "forbiddenPaths": [
+      "src/features/agent/**",
+      "src/features/canvas/components/**"
+    ],
+    "allowedChanges": [
+      "每个 workspace_app 增加 embedEnabled，默认 false",
+      "Windows 尝试把用户选中的窗口放到本产品客户区",
+      "失败（权限、所有者、UWP、管理员窗口）回退 focus_workspace_app",
+      "文案使用“在本窗口预览”，禁止“内置浏览器 / 在此操作外部软件”",
+      "用户可随时退出内嵌，窗口回到独立状态"
+    ],
+    "forbiddenChanges": [
+      "默认内嵌所有软件",
+      "把中间区域改成唯一工作面",
+      "读取软件内部文档或注入输入",
+      "macOS 内嵌（本包只做 Windows 实验）",
+      "把 HWND 数字暴露给前端业务层"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d12-opt-in",
+      "name": "按软件开关",
+      "description": "只有用户打开“在本窗口预览”的软件才尝试内嵌。"
+    },
+    {
+      "id": "d12-fallback",
+      "name": "失败回退",
+      "description": "内嵌不了就切到真实窗口，并说明原因。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s12-01",
+      "title": "数据开关与 command",
+      "status": "pending",
+      "doneWhen": "embedEnabled 默认 false；有 set_workspace_app_embed。"
+    },
+    {
+      "id": "s12-02",
+      "title": "Windows 宿主实验",
+      "status": "pending",
+      "doneWhen": "选中窗口可尝试放入客户区；不支持的类型立即失败。"
+    },
+    {
+      "id": "s12-03",
+      "title": "退出与回退",
+      "status": "pending",
+      "doneWhen": "关闭预览后窗口独立存在；失败走聚焦。"
+    },
+    {
+      "id": "s12-04",
+      "title": "人工验收",
+      "status": "pending",
+      "doneWhen": "记事本可试；浏览器/Electron/管理员窗口的失败被记录，不装成功。"
+    }
+  ],
+  "commands": [
+    "set_workspace_app_embed",
+    "embed_workspace_app_window",
+    "release_embedded_window"
+  ],
+  "acceptance": [
+    "默认工作流仍是点卡片切外部窗口",
+    "未打开开关的软件绝不被嵌入",
+    "内嵌失败有原因并回退聚焦",
+    "不读取外部软件内部内容"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-12-window-embed/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-12-window-embed/README.md"
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "id": "pkg-13-activity-observe",
+  "seq": 13,
+  "title": "可选的窗口活动观察",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-10-multi-window"
+  ],
+  "parallelWith": [
+    "pkg-14-ai-canvas-summary"
+  ],
+  "ownerHint": "平台适配智能体 / 数据与本地存储智能体",
+  "goal": "在用户打开开关后，只记录已经能从窗口枚举看到的变化：前台应用、窗口标题、聚焦时间。不读文档、不记键盘、不注入。",
+  "changeScope": {
+    "summary": "opt-in 的窗口元数据观察，写入本地活动记录。这不是键鼠监听，也不是软件内部探针。",
+    "allowedPaths": [
+      "src-tauri/migrations/**",
+      "src-tauri/src/domain/**",
+      "src-tauri/src/storage/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/platform/**",
+      "src/features/activity-log/**",
+      "src/features/settings/**",
+      "src/features/api/**",
+      "src/lib/types.ts",
+      "src/test/**"
+    ],
+    "forbiddenPaths": [
+      "src/features/agent/**"
+    ],
+    "allowedChanges": [
+      "全局或按工作区的 observeActivity 开关，默认 false",
+      "低频轮询或系统前台窗口变化：标题、进程名、时间",
+      "写入 activity_events，仅本地",
+      "右侧时间线只展示用户同意收集的这些事件",
+      "随时关闭开关并停止观察"
+    ],
+    "forbiddenChanges": [
+      "键盘钩子、剪贴板常驻监听、截屏常驻",
+      "读取外部软件文档、网页、编辑器缓冲区",
+      "把观察数据上传到任何服务器",
+      "默认打开观察"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d13-opt-in",
+      "name": "默认关闭的观察开关",
+      "description": "设置里说明只记窗口标题和切换时间，不记击键和文件内容。"
+    },
+    {
+      "id": "d13-timeline",
+      "name": "本地活动时间线",
+      "description": "打开开关后，右侧能看到“10:30 切到 Chrome”。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s13-01",
+      "title": "开关与隐私文案",
+      "status": "pending",
+      "doneWhen": "默认关；文案写明观察范围和不做的事。"
+    },
+    {
+      "id": "s13-02",
+      "title": "窗口元数据采样",
+      "status": "pending",
+      "doneWhen": "只采样前台窗口标题/进程/时间，有节流。"
+    },
+    {
+      "id": "s13-03",
+      "title": "本地时间线展示",
+      "status": "pending",
+      "doneWhen": "activity-log feature 只读本地事件；关闭开关立即停止写入。"
+    },
+    {
+      "id": "s13-04",
+      "title": "测试与审查",
+      "status": "pending",
+      "doneWhen": "默认关有测试；diff 里没有键盘钩子或网络上报。"
+    }
+  ],
+  "commands": [
+    "get_activity_settings",
+    "update_activity_settings",
+    "list_activity_events"
+  ],
+  "acceptance": [
+    "新安装默认不观察",
+    "关闭后不再写新事件",
+    "事件不含键鼠内容和文档正文",
+    "没有任何上传逻辑"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-13-activity-observe/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-13-activity-observe/README.md"
+  }
+}
