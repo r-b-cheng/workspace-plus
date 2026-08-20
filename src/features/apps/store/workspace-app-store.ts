@@ -2,8 +2,8 @@ import { create } from 'zustand';
 
 import { appApi } from '@/features/api/app-api';
 import { AppApiError } from '@/features/api/tauri-client';
-import { statusFromErrorCode } from '@/features/windows/window-status';
-import { userMessageForError } from '@/lib/errors';
+import { canFocusWorkspaceApp, statusFromErrorCode } from '@/features/windows/window-status';
+import { ERROR_CODES, userMessageForError } from '@/lib/errors';
 import type { CommandError, InstalledApp, WorkspaceApp } from '@/lib/types';
 
 export type WorkspaceAppStoreData = {
@@ -184,47 +184,62 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
 
     try {
       const launched = await appApi.launchWorkspaceApp({ workspaceId, installedAppId });
-      const workspaceApps = upsertWorkspaceApp(get().workspaceApps, launched);
+      const stillCurrent = get().currentWorkspaceId === workspaceId;
+      const cached = upsertWorkspaceApp(
+        stillCurrent
+          ? get().workspaceApps
+          : (get().workspaceAppsByWorkspaceId[workspaceId] ?? []),
+        launched,
+      );
+      if (stillCurrent) {
+        workspaceAppsRequestSeq += 1;
+      }
       set({
-        workspaceApps,
+        workspaceApps: stillCurrent ? cached : get().workspaceApps,
         workspaceAppsByWorkspaceId: {
           ...get().workspaceAppsByWorkspaceId,
-          [workspaceId]: workspaceApps,
+          [workspaceId]: cached,
         },
+        workspaceAppsLoading: stillCurrent ? false : get().workspaceAppsLoading,
         launchingInstalledAppIds: withoutId(get().launchingInstalledAppIds, installedAppId),
-        installedApps: get().installedApps.map((app) =>
-          app.id === installedAppId ? { ...app, alreadyInWorkspace: true } : app,
-        ),
-        appDialogOpen: false,
+        installedApps: stillCurrent
+          ? get().installedApps.map((app) =>
+              app.id === installedAppId ? { ...app, alreadyInWorkspace: true } : app,
+            )
+          : get().installedApps,
+        appDialogOpen: stillCurrent ? false : get().appDialogOpen,
       });
       return launched;
     } catch (error) {
       const appError = toCommandError(error);
-      const workspaceApps = get().workspaceApps.map((app) =>
+      const stillCurrent = get().currentWorkspaceId === workspaceId;
+      const source = stillCurrent
+        ? get().workspaceApps
+        : (get().workspaceAppsByWorkspaceId[workspaceId] ?? []);
+      const cached = source.map((app) =>
         app.installedAppId === installedAppId
           ? { ...app, status: statusFromErrorCode(appError.code), errorMessage: appError.message }
           : app,
       );
       set({
         launchingInstalledAppIds: withoutId(get().launchingInstalledAppIds, installedAppId),
-        appError,
-        workspaceApps,
+        appError: stillCurrent ? appError : get().appError,
+        workspaceApps: stillCurrent ? cached : get().workspaceApps,
         workspaceAppsByWorkspaceId: {
           ...get().workspaceAppsByWorkspaceId,
-          [workspaceId]: workspaceApps,
+          [workspaceId]: cached,
         },
       });
       try {
         const refreshed = await appApi.listWorkspaceApps({ workspaceId });
-        if (get().currentWorkspaceId === workspaceId) {
-          set({
-            workspaceApps: refreshed,
-            workspaceAppsByWorkspaceId: {
-              ...get().workspaceAppsByWorkspaceId,
-              [workspaceId]: refreshed,
-            },
-          });
-        }
+        set({
+          workspaceApps:
+            get().currentWorkspaceId === workspaceId ? refreshed : get().workspaceApps,
+          workspaceAppsByWorkspaceId: {
+            ...get().workspaceAppsByWorkspaceId,
+            [workspaceId]: refreshed,
+          },
+        });
       } catch {
         // Keep the local card list; the banner already shows the launch error.
       }
@@ -240,20 +255,29 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
 
     try {
       const focused = await appApi.focusWorkspaceApp({ workspaceAppId });
-      const workspaceApps = upsertWorkspaceApp(get().workspaceApps, focused);
       const workspaceId = focused.workspaceId;
+      const stillCurrent = get().currentWorkspaceId === workspaceId;
+      const cached = upsertWorkspaceApp(
+        stillCurrent
+          ? get().workspaceApps
+          : (get().workspaceAppsByWorkspaceId[workspaceId] ?? []),
+        focused,
+      );
       set({
-        workspaceApps,
+        workspaceApps: stillCurrent ? cached : get().workspaceApps,
         workspaceAppsByWorkspaceId: {
           ...get().workspaceAppsByWorkspaceId,
-          [workspaceId]: workspaceApps,
+          [workspaceId]: cached,
         },
         pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
       });
       return focused;
     } catch (error) {
       const appError = toCommandError(error);
-      const status = statusFromErrorCode(appError.code);
+      const status =
+        appError.code === ERROR_CODES.FOCUS_DENIED
+          ? 'running'
+          : statusFromErrorCode(appError.code);
       const workspaceApps = get().workspaceApps.map((app) =>
         app.id === workspaceAppId
           ? {
@@ -285,7 +309,7 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
     if (app.status === 'launching') {
       return app;
     }
-    if (app.status === 'running') {
+    if (canFocusWorkspaceApp(app.status)) {
       return get().focusWorkspaceApp(app.id);
     }
     return get().reopenWorkspaceApp(app);
@@ -302,7 +326,7 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
         get().workspaceAppsByWorkspaceId[workspaceId]?.find((item) => item.installedAppId === app.id);
 
       if (existing) {
-        if (existing.status === 'running') {
+        if (canFocusWorkspaceApp(existing.status)) {
           await get().focusWorkspaceApp(existing.id);
         } else {
           await get().reopenWorkspaceApp(existing);
@@ -314,7 +338,7 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
       await get().loadWorkspaceApps(workspaceId);
       const refreshed = get().workspaceApps.find((item) => item.installedAppId === app.id);
       if (refreshed) {
-        if (refreshed.status === 'running') {
+        if (canFocusWorkspaceApp(refreshed.status)) {
           await get().focusWorkspaceApp(refreshed.id);
         } else {
           await get().reopenWorkspaceApp(refreshed);

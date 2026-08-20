@@ -38,7 +38,7 @@ Windows 真实系统人工验收负责验证平台适配层是否在真实桌面
 
 第五条主链路是失败反馈：mock `launchApp` 返回路径不存在、权限不足或启动命令无效时，界面必须展示明确错误原因；mock `focusWorkspaceApp` 返回窗口已关闭时，界面必须展示“窗口已关闭”一类提示，并提供重新打开入口；mock `saveCanvas` 失败时，顶部保存状态必须变为失败或待重试，不能继续显示“已保存”。
 
-第六条主链路是快速切换：用户通过配置的快捷键打开快速切换面板，输入当前工作区内的软件名称、别名或用途备注，键盘选择结果并按 Enter。已运行窗口应调用聚焦命令；窗口已关闭时应显示重新打开入口；未加入当前工作区但来自系统软件库的结果应显示“添加并打开”。Playwright 可以通过测试钩子模拟快捷键打开面板，但不能证明系统级全局快捷键注册成功。
+第六条主链路是快速切换：用户通过配置的快捷键打开快速切换面板，输入当前工作区内的软件名称、别名或用途备注，键盘选择结果并按 Enter。已运行窗口应调用聚焦命令；窗口已关闭时应显示重新打开入口；未加入当前工作区但来自系统软件库的结果应显示“添加并打开”。Playwright 可以通过测试钩子模拟快捷键打开面板，但不能证明系统级全局快捷键注册成功。hook 不是系统热键证据；注册、冲突、真按键和真切窗的人工清单在 `docs/dev-plan/packages/pkg-09-p0-acceptance/windows-hotkey-manual-acceptance.md`，自动 / 人工对照见同目录 `verification-matrix.md`。
 
 ## 4. Rust 单元与集成测试范围
 
@@ -110,4 +110,9 @@ Playwright 主链路已落地，但全部走 `VITE_E2E=1` + `window.__E2E_MOCK_I
 
 - `docs/dev-plan/packages/pkg-06-integration-acceptance/verification-matrix.md`
 - `docs/dev-plan/packages/pkg-06-integration-acceptance/windows-manual-acceptance.md`
+
+快捷键与快速切换的 hook 用例同样不是系统热键证据。对照与人工清单见：
+
+- `docs/dev-plan/packages/pkg-09-p0-acceptance/verification-matrix.md`
+- `docs/dev-plan/packages/pkg-09-p0-acceptance/windows-hotkey-manual-acceptance.md`
 

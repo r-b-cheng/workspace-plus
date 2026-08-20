@@ -2,7 +2,7 @@
   "id": "pkg-09-p0-acceptance",
   "seq": 9,
   "title": "P0 剩余项联调与验收",
-  "status": "pending",
+  "status": "completed",
   "dependsOn": [
     "pkg-07-settings-and-shortcut",
     "pkg-08-quick-switch-panel"
@@ -56,25 +56,25 @@
     {
       "id": "s09-01",
       "title": "联调打开、过滤、三种动作",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "从设置改快捷键到面板执行主路径可演示。"
     },
     {
       "id": "s09-02",
       "title": "补 Playwright",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "e2e 用 hook 覆盖面板；文件头标明不是系统热键证据。"
     },
     {
       "id": "s09-03",
       "title": "补 Windows 人工清单",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "存在可勾选清单：注册、冲突、真按键、切窗。"
     },
     {
       "id": "s09-04",
       "title": "标记 P0 剩余项完成",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "本包与 07/08 在总控里可标 completed；下一轮进入 P2。"
     }
   ],

@@ -44,7 +44,7 @@ docs/dev-plan/
   README.md
   folder-structure.md
   development-flow.json          已完成的竖切
-  p0-p2-flow.json                当前总控：剩余 P0 + P2
+  p0-p2-flow.json                当前总控：P0 剩余项已完成，下一轮从 pkg-10 进入 P2
   assemble-p0-p2-flow.py
   packages/
     pkg-01-engineering-foundation/

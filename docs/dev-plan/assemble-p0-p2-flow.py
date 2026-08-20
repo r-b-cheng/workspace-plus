@@ -43,7 +43,9 @@ flow = {
     "lockedDecisions": {
         "skipP1": True,
         "skipP1Note": "用户要求先做完剩余 P0，然后直接做 P2。窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、安装包先不做。",
-        "remainingP0": "quick_switch_and_configurable_shortcut",
+        "remainingP0": "completed",
+        "remainingP0Note": "pkg-07、pkg-08、pkg-09 已完成。下一轮从 pkg-10 进入 P2。pkg-10 至 pkg-18 仍为 pending，不要标成 completed。",
+        "nextPackage": "pkg-10-multi-window",
         "defaultShortcut": "Control+KeyO",
         "shortcutMustBeConfigurable": True,
         "embedIsOptIn": True,

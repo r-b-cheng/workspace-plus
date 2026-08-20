@@ -34,6 +34,20 @@ export async function addInstalledApp(page: Page, appId: string) {
   await expect(page.getByTestId('add-app-dialog')).toBeHidden();
 }
 
+/**
+ * 用 hook 打开快速切换面板。不是系统级全局热键已注册的证据。
+ */
+export async function openQuickSwitchViaHook(page: Page) {
+  await page.waitForFunction(() => typeof window.__E2E_OPEN_QUICK_SWITCH__ === 'function');
+  await page.evaluate(() => {
+    if (typeof window.__E2E_OPEN_QUICK_SWITCH__ !== 'function') {
+      throw new Error('E2E quick-switch hook missing');
+    }
+    window.__E2E_OPEN_QUICK_SWITCH__();
+  });
+  await expect(page.getByTestId('quick-switch-panel')).toBeVisible();
+}
+
 export function workspaceListItem(page: Page, name: string) {
   return page.getByTestId(/^workspace-list-item-/).filter({ hasText: name });
 }

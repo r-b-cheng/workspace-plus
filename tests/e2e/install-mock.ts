@@ -40,14 +40,103 @@ export function installE2eMockInvoke() {
   const workspaceApps = [];
   const canvases = {};
   const assets = {};
+  const appSettings = {
+    quickSwitchShortcut: 'Control+KeyO',
+    registrationStatus: 'registered',
+    lastError: null,
+  };
   const control = {
     failSaveCanvas: false,
     failNextFocus: false,
+    closeNextWorkspaceApp: false,
+    closeWorkspaceAppId: null,
+    lastFocusWorkspaceAppId: null,
+    lastLaunchInstalledAppId: null,
   };
 
   function fail(code, message) {
     throw { code: code, message: message };
   }
+
+  function snapshotSettings() {
+    return {
+      quickSwitchShortcut: appSettings.quickSwitchShortcut,
+      registrationStatus: appSettings.registrationStatus,
+      lastError: appSettings.lastError,
+    };
+  }
+
+  function normalizeShortcut(input) {
+    const raw = input == null ? '' : String(input).trim();
+    if (!raw) {
+      return 'Control+KeyO';
+    }
+    const tokens = raw.split('+');
+    const parts = [];
+    for (let i = 0; i < tokens.length; i += 1) {
+      const token = tokens[i].trim();
+      if (!token) {
+        fail('Validation', '快捷键格式无效，请使用例如 Control+KeyO');
+      }
+      parts.push(token);
+    }
+    if (parts.length < 2) {
+      fail('Validation', '快捷键至少需要 Control、Alt 或 Meta 之一');
+    }
+    const key = parts[parts.length - 1];
+    const mods = parts.slice(0, -1);
+    let hasPrimaryMod = false;
+    for (let i = 0; i < mods.length; i += 1) {
+      const lower = mods[i].toLowerCase();
+      if (
+        lower === 'control' ||
+        lower === 'ctrl' ||
+        lower === 'alt' ||
+        lower === 'meta' ||
+        lower === 'command' ||
+        lower === 'super'
+      ) {
+        hasPrimaryMod = true;
+      }
+    }
+    if (!hasPrimaryMod) {
+      fail('Validation', '快捷键至少需要 Control、Alt 或 Meta 之一');
+    }
+    if (!key || /^(control|ctrl|alt|meta|shift|command|super)$/i.test(key)) {
+      fail('Validation', '快捷键缺少主键，请使用例如 Control+KeyO');
+    }
+    return parts.join('+');
+  }
+
+  function markWorkspaceAppClosed(app) {
+    app.status = 'closed';
+    app.windowTitle = undefined;
+    app.errorMessage = '窗口已关闭，可以重新打开。';
+  }
+
+  function closeWorkspaceApp(id) {
+    const app = workspaceApps.find(function (item) {
+      return item.id === id;
+    });
+    if (app) {
+      markWorkspaceAppClosed(app);
+    }
+  }
+
+  function applyCloseControls() {
+    if (control.closeWorkspaceAppId) {
+      closeWorkspaceApp(control.closeWorkspaceAppId);
+      control.closeWorkspaceAppId = null;
+    }
+    if (control.closeNextWorkspaceApp) {
+      control.closeNextWorkspaceApp = false;
+      if (workspaceApps.length > 0) {
+        markWorkspaceAppClosed(workspaceApps[0]);
+      }
+    }
+  }
+
+  control.closeWorkspaceApp = closeWorkspaceApp;
 
   function withAlready(workspaceId) {
     return installedApps.map(function (app) {
@@ -142,6 +231,7 @@ export function installE2eMockInvoke() {
         return Object.assign({}, workspace);
       }
       case 'list_workspace_apps':
+        applyCloseControls();
         return workspaceApps
           .filter(function (item) {
             return item.workspaceId === args.workspaceId;
@@ -190,6 +280,7 @@ export function installE2eMockInvoke() {
         const existing = workspaceApps.find(function (item) {
           return item.workspaceId === workspaceId && item.installedAppId === installedAppId;
         });
+        control.lastLaunchInstalledAppId = installedAppId;
         if (existing) {
           existing.status = 'running';
           existing.windowTitle = installed.name;
@@ -231,7 +322,22 @@ export function installE2eMockInvoke() {
         }
         app.status = 'running';
         app.lastFocusedAt = isoNow();
+        control.lastFocusWorkspaceAppId = app.id;
         return Object.assign({}, app);
+      }
+      case 'get_app_settings':
+        return snapshotSettings();
+      case 'update_app_settings': {
+        const normalized = normalizeShortcut(args.quickSwitchShortcut);
+        appSettings.quickSwitchShortcut = normalized;
+        if (/conflict/i.test(normalized)) {
+          appSettings.registrationStatus = 'conflict';
+          appSettings.lastError = '快捷键与其他软件冲突（E2E mock）';
+        } else {
+          appSettings.registrationStatus = 'registered';
+          appSettings.lastError = null;
+        }
+        return snapshotSettings();
       }
       case 'remove_workspace_app': {
         const index = workspaceApps.findIndex(function (item) {

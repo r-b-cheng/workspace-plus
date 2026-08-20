@@ -22,7 +22,9 @@
   "lockedDecisions": {
     "skipP1": true,
     "skipP1Note": "用户要求先做完剩余 P0，然后直接做 P2。窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、安装包先不做。",
-    "remainingP0": "quick_switch_and_configurable_shortcut",
+    "remainingP0": "completed",
+    "remainingP0Note": "pkg-07、pkg-08、pkg-09 已完成。下一轮从 pkg-10 进入 P2。pkg-10 至 pkg-18 仍为 pending，不要标成 completed。",
+    "nextPackage": "pkg-10-multi-window",
     "defaultShortcut": "Control+KeyO",
     "shortcutMustBeConfigurable": true,
     "embedIsOptIn": true,
@@ -353,7 +355,7 @@
       "id": "pkg-09-p0-acceptance",
       "seq": 9,
       "title": "P0 剩余项联调与验收",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "pkg-07-settings-and-shortcut",
         "pkg-08-quick-switch-panel"
@@ -407,25 +409,25 @@
         {
           "id": "s09-01",
           "title": "联调打开、过滤、三种动作",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "从设置改快捷键到面板执行主路径可演示。"
         },
         {
           "id": "s09-02",
           "title": "补 Playwright",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "e2e 用 hook 覆盖面板；文件头标明不是系统热键证据。"
         },
         {
           "id": "s09-03",
           "title": "补 Windows 人工清单",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "存在可勾选清单：注册、冲突、真按键、切窗。"
         },
         {
           "id": "s09-04",
           "title": "标记 P0 剩余项完成",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "本包与 07/08 在总控里可标 completed；下一轮进入 P2。"
         }
       ],

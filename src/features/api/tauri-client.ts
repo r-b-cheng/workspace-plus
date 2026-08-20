@@ -9,6 +9,11 @@ declare global {
     __E2E_MOCK_CONTROL__?: {
       failSaveCanvas: boolean;
       failNextFocus: boolean;
+      closeNextWorkspaceApp?: boolean;
+      closeWorkspaceAppId?: string | null;
+      lastFocusWorkspaceAppId?: string | null;
+      lastLaunchInstalledAppId?: string | null;
+      closeWorkspaceApp?: (id: string) => void;
     };
     __E2E_ADD_IMAGE__?: (
       fileName: string,
