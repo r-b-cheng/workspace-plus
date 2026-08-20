@@ -2,4 +2,6 @@
 
 Rust 集成测试：临时数据库、业务规则、mock 平台。
 
+默认 `cargo test` 使用临时 SQLite 和 `MockPlatformAdapter`，不启动真实 GUI，也不碰开始菜单或真实窗口。
+
 依赖真实开始菜单或真实窗口的用例必须加显式开关，不能进默认 `cargo test`。

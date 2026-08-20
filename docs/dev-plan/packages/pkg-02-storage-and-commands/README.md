@@ -1,6 +1,6 @@
 # pkg-02 数据层、业务 command 与 mock 平台
 
-状态：pending  
+状态：completed  
 依赖：无  
 可并行：pkg-01
 
@@ -60,15 +60,15 @@ command 只做参数校验、调 service、返回 camelCase DTO。复杂规则�
 
 ## 子任务
 
-| ID | 子任务 | 完成标准 |
-|---|---|---|
-| s02-01 | domain 与错误类型 | camelCase DTO，结构化错误码 |
-| s02-02 | migration 与开库 | app data 下 sqlite，迁移可重复执行 |
-| s02-03 | repository / service | 事务写入；删工作区保留软件库 |
-| s02-04 | trait + mock | 可注入；真 Windows 可替换 |
-| s02-05 | 注册 command | 清单齐全，command 很薄 |
-| s02-06 | 空库启动 | `list_workspaces` 为空 |
-| s02-07 | Rust 集成测试 | 隔离 / 去重 / 删除 / 画布 |
+| ID | 子任务 | 状态 | 完成标准 |
+|---|---|---|---|
+| s02-01 | domain 与错误类型 | completed | camelCase DTO，结构化错误码 |
+| s02-02 | migration 与开库 | completed | app data 下 sqlite，迁移可重复执行 |
+| s02-03 | repository / service | completed | 事务写入；删工作区保留软件库 |
+| s02-04 | trait + mock | completed | 可注入；真 Windows 可替换 |
+| s02-05 | 注册 command | completed | 清单齐全，command 很薄 |
+| s02-06 | 空库启动 | completed | `list_workspaces` 为空 |
+| s02-07 | Rust 集成测试 | completed | 隔离 / 去重 / 删除 / 画布 |
 
 ## 数据边界
 

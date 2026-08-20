@@ -255,7 +255,7 @@
       "id": "pkg-02-storage-and-commands",
       "seq": 2,
       "title": "数据层、业务 command 与 mock 平台",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [],
       "parallelWith": [
         "pkg-01-engineering-foundation"
@@ -334,43 +334,43 @@
         {
           "id": "s02-01",
           "title": "拆分 domain 模型与错误类型",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "Workspace、InstalledApp、WorkspaceApp、NativeWindow、CanvasNode、Asset、结构化错误码存在；序列化为 camelCase。"
         },
         {
           "id": "s02-02",
           "title": "写 migration 与数据库打开逻辑",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "app data 目录下可创建 workspace-hub.sqlite3；PRAGMA foreign_keys/WAL 生效；迁移可重复执行。"
         },
         {
           "id": "s02-03",
           "title": "实现 repository 与 service",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "工作区、软件库、工作区软件、窗口绑定、画布、资源都能事务写入；删除工作区不删 installed_apps。"
         },
         {
           "id": "s02-04",
           "title": "实现 PlatformAdapter trait 与 mock",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "scan/launch/list_windows/focus/resolve_manual_target 可被 mock；Windows 真实实现可稍后替换。"
         },
         {
           "id": "s02-05",
           "title": "注册全部竖切 command 并接到 service",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "lib.rs 注册清单中的 command；command 只做校验和调用，不含平台细节。"
         },
         {
           "id": "s02-06",
           "title": "首次启动空库，不写入示例工作区",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "新数据库 list_workspaces 为空；mock 软件库可在 refresh 后出现。"
         },
         {
           "id": "s02-07",
           "title": "补 Rust 集成测试",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "两个工作区数据隔离、重复添加不双绑、删工作区保留软件库、画布重启可读，均有测试。"
         }
       ],
