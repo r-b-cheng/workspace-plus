@@ -42,6 +42,7 @@ export function mockWorkspaceApp(overrides: Partial<WorkspaceApp> = {}): Workspa
     installedAppId: 'app-chrome',
     name: 'Chrome',
     status: 'running',
+    embedEnabled: false,
     ...overrides,
   };
 }

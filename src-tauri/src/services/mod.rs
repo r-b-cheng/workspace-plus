@@ -10,9 +10,9 @@ use rusqlite::Connection;
 
 use crate::domain::{
     normalize_shortcut, AppSettings, Asset, Canvas, CanvasAssetContent, CanvasEdge,
-    CanvasEdgeInput, CanvasNode, CanvasNodeInput, DeleteWorkspaceResult, InstalledApp,
-    RemoveWorkspaceAppResult, Workspace, WorkspaceApp, WorkspaceAppWindow,
-    DEFAULT_QUICK_SWITCH_SHORTCUT, REGISTRATION_UNREGISTERED,
+    CanvasEdgeInput, CanvasNode, CanvasNodeInput, DeleteWorkspaceResult, EmbedWorkspaceAppResult,
+    HostBounds, InstalledApp, ReleaseEmbeddedWindowResult, RemoveWorkspaceAppResult, Workspace,
+    WorkspaceApp, WorkspaceAppWindow, DEFAULT_QUICK_SWITCH_SHORTCUT, REGISTRATION_UNREGISTERED,
 };
 use crate::errors::AppError;
 use crate::platform::{
@@ -52,12 +52,23 @@ impl Default for ShortcutRegistrationState {
     }
 }
 
+#[derive(Clone, Debug)]
+struct EmbedSession {
+    workspace_id: String,
+    workspace_app_id: String,
+    opaque_window_id: String,
+    original_style: i32,
+    original_ex_style: i32,
+    original_parent: isize,
+}
+
 /// Orchestrates repositories and the injectable platform adapter.
 pub struct AppService {
     conn: Mutex<Connection>,
     adapter: Arc<dyn PlatformAdapter>,
     paths: AppPaths,
     shortcut_registration: Mutex<ShortcutRegistrationState>,
+    embed_session: Mutex<Option<EmbedSession>>,
 }
 
 impl AppService {
@@ -70,6 +81,7 @@ impl AppService {
             adapter,
             paths,
             shortcut_registration: Mutex::new(ShortcutRegistrationState::default()),
+            embed_session: Mutex::new(None),
         })
     }
 
@@ -107,6 +119,18 @@ impl AppService {
         self.shortcut_registration
             .lock()
             .map_err(|_| AppError::internal("shortcut registration lock is poisoned"))
+    }
+
+    fn lock_embed(&self) -> Result<MutexGuard<'_, Option<EmbedSession>>, AppError> {
+        self.embed_session
+            .lock()
+            .map_err(|_| AppError::internal("embed session lock is poisoned"))
+    }
+
+    fn workspace_app_dto(&self, workspace_app_id: &str) -> Result<WorkspaceApp, AppError> {
+        let conn = self.lock_db()?;
+        storage::workspace_app_get_dto(&conn, workspace_app_id)?
+            .ok_or_else(|| AppError::not_found("workspace app not found"))
     }
 
     pub fn get_app_settings(&self) -> Result<AppSettings, AppError> {
@@ -204,6 +228,7 @@ impl AppService {
     }
 
     pub fn delete_workspace(&self, workspace_id: &str) -> Result<DeleteWorkspaceResult, AppError> {
+        self.release_embedded_if_workspace(workspace_id)?;
         let mut conn = self.lock_db()?;
         let tx = conn.transaction()?;
         require_workspace(&tx, workspace_id)?;
@@ -224,6 +249,7 @@ impl AppService {
     }
 
     pub fn set_active_workspace(&self, workspace_id: &str) -> Result<Workspace, AppError> {
+        self.release_embedded_unless_workspace(workspace_id)?;
         let mut conn = self.lock_db()?;
         let tx = conn.transaction()?;
         require_workspace(&tx, workspace_id)?;
@@ -794,6 +820,9 @@ impl AppService {
         &self,
         workspace_app_id: &str,
     ) -> Result<RemoveWorkspaceAppResult, AppError> {
+        if self.embedded_workspace_app_id()?.as_deref() == Some(workspace_app_id) {
+            let _ = self.release_embedded_window();
+        }
         let mut conn = self.lock_db()?;
         let tx = conn.transaction()?;
         let row = storage::workspace_app_get(&tx, workspace_app_id)?
@@ -802,11 +831,242 @@ impl AppService {
         let now = now_utc();
         storage::workspace_app_soft_delete(&tx, &row.id, &now)?;
         storage::native_window_soft_delete_for_workspace_app(&tx, &row.id, &now)?;
+        storage::settings_delete(&tx, &storage::workspace_app_embed_key(&row.id))?;
         tx.commit()?;
         Ok(RemoveWorkspaceAppResult {
             workspace_app_id: workspace_app_id.to_string(),
             removed: true,
         })
+    }
+
+    pub fn set_workspace_app_embed(
+        &self,
+        workspace_app_id: &str,
+        embed_enabled: bool,
+    ) -> Result<WorkspaceApp, AppError> {
+        let workspace_id = {
+            let conn = self.lock_db()?;
+            let row = storage::workspace_app_get(&conn, workspace_app_id)?
+                .filter(|item| item.deleted_at.is_none())
+                .ok_or_else(|| AppError::not_found("workspace app not found"))?;
+            row.workspace_id
+        };
+        if !embed_enabled && self.embedded_workspace_app_id()?.as_deref() == Some(workspace_app_id)
+        {
+            let _ = self.release_embedded_window();
+        }
+        {
+            let conn = self.lock_db()?;
+            let key = storage::workspace_app_embed_key(workspace_app_id);
+            if embed_enabled {
+                storage::settings_set(
+                    &conn,
+                    &key,
+                    Some("true"),
+                    Some(&workspace_id),
+                    &now_utc(),
+                )?;
+            } else {
+                storage::settings_delete(&conn, &key)?;
+            }
+        }
+        self.workspace_app_dto(workspace_app_id)
+    }
+
+    pub fn embed_workspace_app_window(
+        &self,
+        workspace_app_id: &str,
+        host_bounds: Option<HostBounds>,
+        host_hwnd: Option<isize>,
+    ) -> Result<EmbedWorkspaceAppResult, AppError> {
+        let app = self.workspace_app_dto(workspace_app_id)?;
+        if !app.embed_enabled {
+            return Err(AppError::validation("未打开在本窗口预览"));
+        }
+
+        // Drop any current preview first. A later failure must not leave the
+        // previous window parented while the UI treats preview as finished.
+        let _ = self.release_embedded_window();
+
+        #[cfg(not(windows))]
+        {
+            let _ = (host_bounds, host_hwnd);
+            return self.embed_fallback(
+                workspace_app_id,
+                "当前系统不支持在本窗口预览，已改回切换真实窗口。",
+            );
+        }
+
+        #[cfg(windows)]
+        {
+            let opaque_id = {
+                let conn = self.lock_db()?;
+                let row = storage::workspace_app_get(&conn, workspace_app_id)?
+                    .filter(|item| item.deleted_at.is_none())
+                    .ok_or_else(|| AppError::not_found("workspace app not found"))?;
+                let binding = match row.last_window_id.as_deref() {
+                    Some(window_id) => storage::native_window_get_binding(&conn, window_id)?,
+                    None => None,
+                };
+                binding
+                    .filter(|item| item.status == "running")
+                    .map(|item| item.external_window_id)
+            };
+            let Some(opaque_id) = opaque_id else {
+                return self.embed_fallback(workspace_app_id, "没有已绑定的窗口，无法预览。");
+            };
+            if let Err(reason) = self.try_reparent_bound_window(
+                &app.workspace_id,
+                workspace_app_id,
+                &opaque_id,
+                host_hwnd,
+                host_bounds.as_ref(),
+            ) {
+                return self.embed_fallback(workspace_app_id, reason);
+            }
+            Ok(EmbedWorkspaceAppResult {
+                workspace_app: self.workspace_app_dto(workspace_app_id)?,
+                embedded: true,
+                fallback_focused: false,
+                reason: None,
+            })
+        }
+    }
+
+    pub fn release_embedded_window(&self) -> Result<ReleaseEmbeddedWindowResult, AppError> {
+        let session = {
+            let mut guard = self.lock_embed()?;
+            guard.take()
+        };
+        let Some(session) = session else {
+            return Ok(ReleaseEmbeddedWindowResult { released: false });
+        };
+
+        #[cfg(windows)]
+        {
+            let info = crate::platform::windows::embed::EmbedRestoreInfo {
+                opaque_window_id: session.opaque_window_id,
+                original_style: session.original_style,
+                original_ex_style: session.original_ex_style,
+                original_parent: session.original_parent,
+            };
+            let _ = crate::platform::windows::embed::restore_embedded_window(&info);
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = session;
+        }
+
+        Ok(ReleaseEmbeddedWindowResult { released: true })
+    }
+
+    fn embedded_workspace_app_id(&self) -> Result<Option<String>, AppError> {
+        Ok(self
+            .lock_embed()?
+            .as_ref()
+            .map(|session| session.workspace_app_id.clone()))
+    }
+
+    fn embedded_workspace_id(&self) -> Result<Option<String>, AppError> {
+        Ok(self
+            .lock_embed()?
+            .as_ref()
+            .map(|session| session.workspace_id.clone()))
+    }
+
+    fn release_embedded_if_workspace(&self, workspace_id: &str) -> Result<(), AppError> {
+        if self.embedded_workspace_id()?.as_deref() == Some(workspace_id) {
+            self.release_embedded_window()?;
+        }
+        Ok(())
+    }
+
+    fn release_embedded_unless_workspace(&self, workspace_id: &str) -> Result<(), AppError> {
+        if self
+            .embedded_workspace_id()?
+            .is_some_and(|current| current != workspace_id)
+        {
+            self.release_embedded_window()?;
+        }
+        Ok(())
+    }
+
+    #[doc(hidden)]
+    pub fn test_force_embed_session(
+        &self,
+        workspace_id: &str,
+        workspace_app_id: &str,
+    ) -> Result<(), AppError> {
+        let mut session = self.lock_embed()?;
+        *session = Some(EmbedSession {
+            workspace_id: workspace_id.to_string(),
+            workspace_app_id: workspace_app_id.to_string(),
+            opaque_window_id: "mock:embed-session".into(),
+            original_style: 0,
+            original_ex_style: 0,
+            original_parent: 0,
+        });
+        Ok(())
+    }
+
+    #[doc(hidden)]
+    pub fn test_has_embed_session(&self) -> bool {
+        self.lock_embed()
+            .ok()
+            .and_then(|guard| guard.as_ref().map(|_| ()))
+            .is_some()
+    }
+
+    fn embed_fallback(
+        &self,
+        workspace_app_id: &str,
+        reason: impl Into<String>,
+    ) -> Result<EmbedWorkspaceAppResult, AppError> {
+        let reason = reason.into();
+        match self.focus_workspace_app(workspace_app_id) {
+            Ok(workspace_app) => Ok(EmbedWorkspaceAppResult {
+                workspace_app,
+                embedded: false,
+                fallback_focused: true,
+                reason: Some(reason),
+            }),
+            Err(err) => Err(err),
+        }
+    }
+
+    #[cfg(windows)]
+    fn try_reparent_bound_window(
+        &self,
+        workspace_id: &str,
+        workspace_app_id: &str,
+        opaque_id: &str,
+        host_hwnd: Option<isize>,
+        host_bounds: Option<&HostBounds>,
+    ) -> Result<(), String> {
+        if let Some(reason) = crate::platform::windows::embed::reject_reason_for_opaque_id(opaque_id)
+        {
+            return Err(reason.to_string());
+        }
+        let Some(host) = host_hwnd.filter(|value| *value != 0) else {
+            return Err("没有可用的宿主窗口，无法预览。".into());
+        };
+        let restore = crate::platform::windows::embed::reparent_to_host(
+            opaque_id,
+            host,
+            host_bounds.map(|bounds| (bounds.x, bounds.y, bounds.width, bounds.height)),
+        )?;
+        let mut session = self
+            .lock_embed()
+            .map_err(|_| "无法保存预览状态。".to_string())?;
+        *session = Some(EmbedSession {
+            workspace_id: workspace_id.to_string(),
+            workspace_app_id: workspace_app_id.to_string(),
+            opaque_window_id: restore.opaque_window_id,
+            original_style: restore.original_style,
+            original_ex_style: restore.original_ex_style,
+            original_parent: restore.original_parent,
+        });
+        Ok(())
     }
 
     pub fn get_canvas(&self, workspace_id: &str) -> Result<Canvas, AppError> {

@@ -9,6 +9,7 @@ import { filterWorkspaceApps, WorkspaceAppCardGrid } from '@/features/apps/compo
 import { WorkspaceAppTabs } from '@/features/apps/components/workspace-app-tabs';
 import { WorkspaceOverview } from '@/features/apps/components/workspace-overview';
 import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
+import { EmbedPreviewHost } from '@/features/windows/components/embed-preview-host';
 import { WhiteboardPanel } from '@/features/canvas/components/whiteboard-panel';
 import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import { settingsApi } from '@/features/api/settings-api';
@@ -74,6 +75,9 @@ export function WorkspaceShell() {
   const reopenWorkspaceApp = useWorkspaceAppStore((state) => state.reopenWorkspaceApp);
   const removeWorkspaceApp = useWorkspaceAppStore((state) => state.removeWorkspaceApp);
   const syncWorkspaceAppCount = useWorkspaceAppStore((state) => state.syncWorkspaceAppCount);
+  const embeddedWorkspaceAppId = useWorkspaceAppStore((state) => state.embeddedWorkspaceAppId);
+  const pendingEmbedWorkspaceAppId = useWorkspaceAppStore((state) => state.pendingEmbedWorkspaceAppId);
+  const releaseEmbeddedWindow = useWorkspaceAppStore((state) => state.releaseEmbeddedWindow);
 
   const saveStatus = useCanvasStore((state) => state.saveStatus);
   const lastSavedAt = useCanvasStore((state) => state.lastSavedAt);
@@ -283,6 +287,10 @@ export function WorkspaceShell() {
               onRemove={(app) => {
                 void removeWorkspaceApp(app.id).then(() => syncAppCount(app.workspaceId));
               }}
+            />
+            <EmbedPreviewHost
+              active={Boolean(embeddedWorkspaceAppId || pendingEmbedWorkspaceAppId)}
+              onExit={() => void releaseEmbeddedWindow()}
             />
           </>
         )}

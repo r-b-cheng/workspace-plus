@@ -2,7 +2,7 @@
   "id": "pkg-12-window-embed",
   "seq": 12,
   "title": "可选的外部窗口内嵌（实验）",
-  "status": "pending",
+  "status": "completed",
   "dependsOn": [
     "pkg-10-multi-window"
   ],
@@ -58,25 +58,25 @@
     {
       "id": "s12-01",
       "title": "数据开关与 command",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "embedEnabled 默认 false；有 set_workspace_app_embed。"
     },
     {
       "id": "s12-02",
       "title": "Windows 宿主实验",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "选中窗口可尝试放入客户区；不支持的类型立即失败。"
     },
     {
       "id": "s12-03",
       "title": "退出与回退",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "关闭预览后窗口独立存在；失败走聚焦。"
     },
     {
       "id": "s12-04",
       "title": "人工验收",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "记事本可试；浏览器/Electron/管理员窗口的失败被记录，不装成功。"
     }
   ],
@@ -93,6 +93,7 @@
   ],
   "docs": {
     "json": "docs/dev-plan/packages/pkg-12-window-embed/pkg.json",
-    "markdown": "docs/dev-plan/packages/pkg-12-window-embed/README.md"
+    "markdown": "docs/dev-plan/packages/pkg-12-window-embed/README.md",
+    "manualAcceptance": "docs/dev-plan/packages/pkg-12-window-embed/windows-embed-manual-acceptance.md"
   }
 }

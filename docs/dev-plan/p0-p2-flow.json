@@ -23,8 +23,8 @@
     "skipP1": true,
     "skipP1Note": "用户要求先做完剩余 P0，然后直接做 P2。窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、安装包先不做。",
     "remainingP0": "completed",
-    "remainingP0Note": "pkg-07、pkg-08、pkg-09 已完成。pkg-10 多窗口已完成。pkg-11 macOS 平台已完成。pkg-12 至 pkg-18 仍为 pending。",
-    "nextPackage": "pkg-12-window-embed",
+    "remainingP0Note": "pkg-07、pkg-08、pkg-09 已完成。pkg-10 多窗口已完成。pkg-11 macOS 平台已完成。pkg-12 可选窗口内嵌已完成。不要实现 pkg-13 及之后的包。",
+    "nextPackage": "pkg-13-activity-observe",
     "defaultShortcut": "Control+KeyO",
     "shortcutMustBeConfigurable": true,
     "embedIsOptIn": true,
@@ -635,7 +635,7 @@
       "id": "pkg-12-window-embed",
       "seq": 12,
       "title": "可选的外部窗口内嵌（实验）",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "pkg-10-multi-window"
       ],
@@ -691,25 +691,25 @@
         {
           "id": "s12-01",
           "title": "数据开关与 command",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "embedEnabled 默认 false；有 set_workspace_app_embed。"
         },
         {
           "id": "s12-02",
           "title": "Windows 宿主实验",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "选中窗口可尝试放入客户区；不支持的类型立即失败。"
         },
         {
           "id": "s12-03",
           "title": "退出与回退",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "关闭预览后窗口独立存在；失败走聚焦。"
         },
         {
           "id": "s12-04",
           "title": "人工验收",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "记事本可试；浏览器/Electron/管理员窗口的失败被记录，不装成功。"
         }
       ],
@@ -726,7 +726,8 @@
       ],
       "docs": {
         "json": "docs/dev-plan/packages/pkg-12-window-embed/pkg.json",
-        "markdown": "docs/dev-plan/packages/pkg-12-window-embed/README.md"
+        "markdown": "docs/dev-plan/packages/pkg-12-window-embed/README.md",
+        "manualAcceptance": "docs/dev-plan/packages/pkg-12-window-embed/windows-embed-manual-acceptance.md"
       }
     },
     {

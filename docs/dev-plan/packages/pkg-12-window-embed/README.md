@@ -1,6 +1,6 @@
 # pkg-12 可选的外部窗口内嵌（实验）
 
-状态：pending  
+状态：completed  
 依赖：pkg-10
 
 ## 目标
@@ -33,3 +33,5 @@
 - 关掉开关的软件行为与现在完全一样
 - 失败原因可读
 - 前端业务层看不到 HWND
+
+人工清单：`windows-embed-manual-acceptance.md`

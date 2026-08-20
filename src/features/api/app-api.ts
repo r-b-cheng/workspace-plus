@@ -1,11 +1,15 @@
 import { AppApiError, callCommand } from '@/features/api/tauri-client';
 import type {
   AddManualAppInput,
+  EmbedWorkspaceAppResult,
+  EmbedWorkspaceAppWindowInput,
   InstalledApp,
   LaunchWorkspaceAppInput,
   ListInstalledAppsInput,
+  ReleaseEmbeddedWindowResult,
   RemoveWorkspaceAppResult,
   SearchInstalledAppsInput,
+  SetWorkspaceAppEmbedInput,
   WorkspaceApp,
   WorkspaceAppIdInput,
   WorkspaceIdInput,
@@ -79,6 +83,24 @@ export const appApi = {
     return callCommand<RemoveWorkspaceAppResult>('remove_workspace_app', {
       workspaceAppId: input.workspaceAppId,
     });
+  },
+
+  setWorkspaceAppEmbed(input: SetWorkspaceAppEmbedInput): Promise<WorkspaceApp> {
+    return callCommand<WorkspaceApp>('set_workspace_app_embed', {
+      workspaceAppId: input.workspaceAppId,
+      embedEnabled: input.embedEnabled,
+    });
+  },
+
+  embedWorkspaceAppWindow(input: EmbedWorkspaceAppWindowInput): Promise<EmbedWorkspaceAppResult> {
+    return callCommand<EmbedWorkspaceAppResult>('embed_workspace_app_window', {
+      workspaceAppId: input.workspaceAppId,
+      hostBounds: input.hostBounds,
+    });
+  },
+
+  releaseEmbeddedWindow(): Promise<ReleaseEmbeddedWindowResult> {
+    return callCommand<ReleaseEmbeddedWindowResult>('release_embedded_window');
   },
 
   pickManualAppPath,

@@ -68,7 +68,7 @@ pub fn request_close_window(native_window_id: &str) -> bool {
     unsafe { PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0)).is_ok() }
 }
 
-fn hwnd_from_opaque_id(native_window_id: &str) -> Result<HWND, PlatformError> {
+pub(crate) fn hwnd_from_opaque_id(native_window_id: &str) -> Result<HWND, PlatformError> {
     let handle = decode_opaque_window_id(native_window_id)
         .ok_or_else(|| PlatformError::window_closed("window is closed or no longer valid"))?;
     Ok(HWND(handle as *mut core::ffi::c_void))

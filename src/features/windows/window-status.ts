@@ -48,6 +48,14 @@ export function canFocusWorkspaceAppWindow(status: WorkspaceAppWindowStatus): bo
   return status === 'running';
 }
 
+export function isWorkspaceAppEmbedEnabled(app: Pick<WorkspaceApp, 'embedEnabled'>): boolean {
+  return app.embedEnabled === true;
+}
+
+export function canPreviewWorkspaceApp(app: Pick<WorkspaceApp, 'embedEnabled' | 'status'>): boolean {
+  return isWorkspaceAppEmbedEnabled(app) && app.status === 'running';
+}
+
 export function workspaceAppWindowStatusLabel(status: WorkspaceAppWindowStatus): string {
   return status === 'closed' ? '已关闭' : '运行中';
 }

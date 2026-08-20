@@ -59,6 +59,35 @@ export type WorkspaceApp = {
   nativeWindowId?: string;
   previewImageUrl?: string;
   errorMessage?: string;
+  embedEnabled?: boolean;
+};
+
+export type HostBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type EmbedWorkspaceAppResult = {
+  workspaceApp: WorkspaceApp;
+  embedded: boolean;
+  fallbackFocused: boolean;
+  reason?: string | null;
+};
+
+export type ReleaseEmbeddedWindowResult = {
+  released: boolean;
+};
+
+export type SetWorkspaceAppEmbedInput = {
+  workspaceAppId: string;
+  embedEnabled: boolean;
+};
+
+export type EmbedWorkspaceAppWindowInput = {
+  workspaceAppId: string;
+  hostBounds?: HostBounds;
 };
 
 export type CanvasNodeType =

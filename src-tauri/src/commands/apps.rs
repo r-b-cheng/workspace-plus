@@ -1,6 +1,9 @@
 use tauri::{AppHandle, Manager, State};
 
-use crate::domain::{InstalledApp, RemoveWorkspaceAppResult, WorkspaceApp, WorkspaceAppWindow};
+use crate::domain::{
+    EmbedWorkspaceAppResult, HostBounds, InstalledApp, ReleaseEmbeddedWindowResult,
+    RemoveWorkspaceAppResult, WorkspaceApp, WorkspaceAppWindow,
+};
 use crate::errors::AppError;
 use crate::services::AppService;
 
@@ -126,4 +129,61 @@ pub fn remove_workspace_app(
         return Err(AppError::validation("workspaceAppId is required"));
     }
     state.remove_workspace_app(&workspace_app_id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn set_workspace_app_embed(
+    handle: AppHandle,
+    workspace_app_id: String,
+    embed_enabled: bool,
+) -> Result<WorkspaceApp, AppError> {
+    if workspace_app_id.trim().is_empty() {
+        return Err(AppError::validation("workspaceAppId is required"));
+    }
+    super::run_blocking(move || {
+        handle
+            .state::<AppService>()
+            .set_workspace_app_embed(&workspace_app_id, embed_enabled)
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn embed_workspace_app_window(
+    handle: AppHandle,
+    workspace_app_id: String,
+    host_bounds: Option<HostBounds>,
+) -> Result<EmbedWorkspaceAppResult, AppError> {
+    if workspace_app_id.trim().is_empty() {
+        return Err(AppError::validation("workspaceAppId is required"));
+    }
+    let host_hwnd = main_window_host(&handle);
+    super::run_blocking(move || {
+        handle.state::<AppService>().embed_workspace_app_window(
+            &workspace_app_id,
+            host_bounds,
+            host_hwnd,
+        )
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn release_embedded_window(
+    handle: AppHandle,
+) -> Result<ReleaseEmbeddedWindowResult, AppError> {
+    super::run_blocking(move || handle.state::<AppService>().release_embedded_window()).await
+}
+
+fn main_window_host(handle: &AppHandle) -> Option<isize> {
+    #[cfg(windows)]
+    {
+        let window = handle.get_webview_window("main")?;
+        window.hwnd().ok().map(|hwnd| hwnd.0 as isize)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = handle;
+        None
+    }
 }

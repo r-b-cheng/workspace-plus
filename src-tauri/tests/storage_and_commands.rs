@@ -652,6 +652,300 @@ fn default_focus_keeps_app_running_when_sibling_windows_remain() {
     assert!(listed.iter().any(|item| item.status == "running"));
 }
 
+#[test]
+fn new_workspace_app_embed_enabled_defaults_false() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("预览默认关", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    assert!(!launched.embed_enabled);
+    let listed = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(!listed[0].embed_enabled);
+    let json = serde_json::to_string(&listed).unwrap();
+    assert!(json.contains("embedEnabled"));
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+}
+
+#[test]
+fn set_workspace_app_embed_round_trips_in_list() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("预览开关", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+
+    let enabled = env
+        .service
+        .set_workspace_app_embed(&launched.id, true)
+        .unwrap();
+    assert!(enabled.embed_enabled);
+    assert!(
+        env.service
+            .list_workspace_apps(&workspace.id)
+            .unwrap()
+            .iter()
+            .any(|app| app.id == launched.id && app.embed_enabled)
+    );
+
+    let disabled = env
+        .service
+        .set_workspace_app_embed(&launched.id, false)
+        .unwrap();
+    assert!(!disabled.embed_enabled);
+    assert!(
+        env.service
+            .list_workspace_apps(&workspace.id)
+            .unwrap()
+            .iter()
+            .any(|app| app.id == launched.id && !app.embed_enabled)
+    );
+}
+
+#[test]
+fn embed_without_switch_does_not_pretend_success() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("未开预览", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let err = env
+        .service
+        .embed_workspace_app_window(&launched.id, None, None)
+        .unwrap_err();
+    assert_eq!(err.code, "Validation");
+    assert!(err.message.contains("未打开在本窗口预览"));
+    assert!(!err.message.to_ascii_lowercase().contains("hwnd"));
+    let json = serde_json::to_string(&err).unwrap();
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+}
+
+#[test]
+fn embed_mock_window_falls_back_to_focus() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("预览回退", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    env.service
+        .set_workspace_app_embed(&launched.id, true)
+        .unwrap();
+
+    let result = env
+        .service
+        .embed_workspace_app_window(&launched.id, None, None)
+        .unwrap();
+    assert!(!result.embedded);
+    assert!(result.fallback_focused);
+    let reason = result.reason.clone().expect("readable reason");
+    assert!(!reason.is_empty());
+    assert!(!reason.to_ascii_lowercase().contains("hwnd"));
+    assert_eq!(result.workspace_app.status, "running");
+    let json = serde_json::to_string(&result).unwrap();
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+}
+
+#[test]
+fn release_embedded_window_is_noop_and_keeps_window() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("退出预览", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    env.service
+        .set_workspace_app_embed(&launched.id, true)
+        .unwrap();
+    let _ = env
+        .service
+        .embed_workspace_app_window(&launched.id, None, None)
+        .unwrap();
+
+    let first = env.service.release_embedded_window().unwrap();
+    assert!(!first.released);
+    let again = env.service.release_embedded_window().unwrap();
+    assert!(!again.released);
+    let listed = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(listed[0].status, "running");
+    let json = serde_json::to_string(&again).unwrap();
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+    assert!(json.contains("released"));
+}
+
+#[test]
+fn failed_second_embed_releases_existing_session() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("二次预览", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let first = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let second = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    env.service
+        .test_force_embed_session(&workspace.id, &first.id)
+        .unwrap();
+    assert!(env.service.test_has_embed_session());
+
+    env.service
+        .set_workspace_app_embed(&second.id, true)
+        .unwrap();
+    let result = env
+        .service
+        .embed_workspace_app_window(&second.id, None, None)
+        .unwrap();
+    assert!(!result.embedded);
+    assert!(result.fallback_focused);
+    assert!(!env.service.test_has_embed_session());
+}
+
+#[test]
+fn switching_or_deleting_workspace_releases_embed_session() {
+    let env = setup();
+    let a = env
+        .service
+        .create_workspace("预览工作区 A", None, None, None)
+        .unwrap();
+    let b = env
+        .service
+        .create_workspace("预览工作区 B", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&a.id, &notepad.id)
+        .unwrap();
+    env.service
+        .test_force_embed_session(&a.id, &launched.id)
+        .unwrap();
+
+    env.service.set_active_workspace(&b.id).unwrap();
+    assert!(!env.service.test_has_embed_session());
+
+    env.service
+        .test_force_embed_session(&a.id, &launched.id)
+        .unwrap();
+    env.service.delete_workspace(&a.id).unwrap();
+    assert!(!env.service.test_has_embed_session());
+}
+
+#[test]
+fn remove_workspace_app_clears_embed_flag() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("移出清开关", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    env.service
+        .set_workspace_app_embed(&launched.id, true)
+        .unwrap();
+    env.service.remove_workspace_app(&launched.id).unwrap();
+    let rebound = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    assert!(!rebound.embed_enabled);
+}
+
 fn base64_png() -> String {
     // 1x1 transparent PNG
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2n2ZcAAAAASUVORK5CYII=".to_string()

@@ -590,9 +590,38 @@ pub fn workspace_app_list_dto(
             native_window_id: row.get(11)?,
             preview_image_url: None,
             error_message: None,
+            embed_enabled: false,
         })
     })?;
-    collect_rows(rows)
+    let mut apps = collect_rows(rows)?;
+    for app in &mut apps {
+        app.embed_enabled = workspace_app_embed_enabled(conn, &app.id)?;
+    }
+    Ok(apps)
+}
+
+pub fn workspace_app_embed_key(workspace_app_id: &str) -> String {
+    format!("workspace_app_embed:{workspace_app_id}")
+}
+
+pub fn workspace_app_embed_enabled(
+    conn: &Connection,
+    workspace_app_id: &str,
+) -> Result<bool, AppError> {
+    Ok(settings_get(conn, &workspace_app_embed_key(workspace_app_id))?.as_deref() == Some("true"))
+}
+
+pub fn workspace_app_get_dto(
+    conn: &Connection,
+    workspace_app_id: &str,
+) -> Result<Option<WorkspaceApp>, AppError> {
+    let Some(row) = workspace_app_get(conn, workspace_app_id)?.filter(|item| item.deleted_at.is_none())
+    else {
+        return Ok(None);
+    };
+    Ok(workspace_app_list_dto(conn, &row.workspace_id)?
+        .into_iter()
+        .find(|item| item.id == workspace_app_id))
 }
 
 pub fn native_window_insert(
@@ -1316,6 +1345,11 @@ pub fn settings_get(conn: &Connection, key: &str) -> Result<Option<String>, AppE
         )
         .optional()?;
     Ok(value.and_then(|raw| serde_json::from_str(&raw).ok()))
+}
+
+pub fn settings_delete(conn: &Connection, key: &str) -> Result<(), AppError> {
+    conn.execute("DELETE FROM app_settings WHERE key = ?1", [key])?;
+    Ok(())
 }
 
 pub fn settings_set(

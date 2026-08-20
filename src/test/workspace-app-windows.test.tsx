@@ -24,6 +24,9 @@ vi.mock('@/features/api/app-api', () => ({
     launchWorkspaceApp: vi.fn(),
     focusWorkspaceApp: vi.fn(),
     removeWorkspaceApp: vi.fn(),
+    setWorkspaceAppEmbed: vi.fn(),
+    embedWorkspaceAppWindow: vi.fn(),
+    releaseEmbeddedWindow: vi.fn(),
     pickManualAppPath: vi.fn(),
   },
 }));

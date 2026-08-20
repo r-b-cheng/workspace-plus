@@ -13,6 +13,7 @@ use crate::platform::{
 
 mod app_launch;
 mod app_scan;
+pub(crate) mod embed;
 mod icon;
 mod manual_target;
 mod window_ops;
