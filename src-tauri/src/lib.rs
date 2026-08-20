@@ -15,6 +15,7 @@ pub fn run() {
     let _ = tracing_subscriber::fmt::try_init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let app_data = app.path().app_data_dir().map_err(|err| err.to_string())?;
             let service = AppService::open(app_data, crate::platform::default_adapter())

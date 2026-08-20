@@ -124,3 +124,52 @@ export type CommandError = {
   code: string;
   message: string;
 };
+
+export type DeleteWorkspaceResult = {
+  workspaceId: string;
+  deleted: boolean;
+};
+
+export type RemoveWorkspaceAppResult = {
+  workspaceAppId: string;
+  removed: boolean;
+};
+
+export type CreateWorkspaceInput = {
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+};
+
+export type RenameWorkspaceInput = {
+  workspaceId: string;
+  name: string;
+};
+
+export type WorkspaceIdInput = {
+  workspaceId: string;
+};
+
+export type ListInstalledAppsInput = {
+  workspaceId?: string;
+};
+
+export type SearchInstalledAppsInput = {
+  query: string;
+  workspaceId?: string;
+};
+
+export type AddManualAppInput = {
+  path: string;
+  workspaceId?: string;
+};
+
+export type LaunchWorkspaceAppInput = {
+  workspaceId: string;
+  installedAppId: string;
+};
+
+export type WorkspaceAppIdInput = {
+  workspaceAppId: string;
+};

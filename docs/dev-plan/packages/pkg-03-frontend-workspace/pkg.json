@@ -2,7 +2,7 @@
   "id": "pkg-03-frontend-workspace",
   "seq": 3,
   "title": "前端工作区主界面接通",
-  "status": "pending",
+  "status": "completed",
   "dependsOn": ["pkg-01-engineering-foundation", "pkg-02-storage-and-commands"],
   "parallelWith": ["pkg-05-windows-platform"],
   "ownerHint": "前端工作区智能体",
@@ -74,37 +74,37 @@
     {
       "id": "s03-01",
       "title": "实现 tauri-client 与领域 API",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "组件和 store 不再直接 import invoke；错误码可映射到界面文案。"
     },
     {
       "id": "s03-02",
       "title": "实现 workspace store 与侧栏",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "启动拉列表；空则引导创建；创建/切换/重命名/删除走后端；删除有确认。"
     },
     {
       "id": "s03-03",
       "title": "实现 app store、添加弹窗、手动添加",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "能搜索、刷新、添加并打开、识别已在工作区；文件对话框只选 exe/lnk。"
     },
     {
       "id": "s03-04",
       "title": "实现标签、卡片、关闭重开、移出工作区",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "状态机覆盖 launching/running/closed/launchFailed/focusFailed；移出只调 remove_workspace_app。"
     },
     {
       "id": "s03-05",
       "title": "主壳组装与保存状态位",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "WorkspaceShell 只编排布局和刷新；右侧白板仍是占位，但有稳定 testid。"
     },
     {
       "id": "s03-06",
       "title": "补 Vitest",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "空状态、名称校验、搜索过滤、重复添加显示已在工作区、删除确认文案有测试。"
     }
   ],

@@ -1,6 +1,6 @@
 # pkg-03 前端工作区主界面接通
 
-状态：pending  
+状态：completed  
 依赖：pkg-01、pkg-02  
 可并行：pkg-05
 
@@ -36,14 +36,14 @@
 
 ## 子任务
 
-| ID | 子任务 | 完成标准 |
-|---|---|---|
-| s03-01 | API 封装 | store/组件不直接 invoke |
-| s03-02 | 工作区 store 与侧栏 | 空态、创建、切换、重命名、删除 |
-| s03-03 | 添加软件与手动路径 | 搜索/刷新/exe/lnk |
-| s03-04 | 标签、卡片、重开、移出 | 关闭态可重开 |
-| s03-05 | 主壳编排 | 右侧仍是占位 |
-| s03-06 | Vitest | 空态、过滤、已加入、删除文案 |
+| ID | 子任务 | 状态 | 完成标准 |
+|---|---|---|---|
+| s03-01 | API 封装 | completed | store/组件不直接 invoke |
+| s03-02 | 工作区 store 与侧栏 | completed | 空态、创建、切换、重命名、删除 |
+| s03-03 | 添加软件与手动路径 | completed | 搜索/刷新/exe/lnk |
+| s03-04 | 标签、卡片、重开、移出 | completed | 关闭态可重开 |
+| s03-05 | 主壳编排 | completed | 右侧仍是占位 |
+| s03-06 | Vitest | completed | 空态、过滤、已加入、删除文案 |
 
 ## 界面约束
 
@@ -57,3 +57,11 @@
 - 添加后出现一张卡片，再点同一软件不会变成两张
 - 删除确认文案正确
 - 前端无平台 API 细节
+
+## 实现说明
+
+- 组件和 store 只走 `src/features/api`，错误统一为 `{ code, message }`。
+- 切换工作区由 `WorkspaceShell` 并行调用 `set_active_workspace` 与 `list_workspace_apps`，workspace-store 不 import app-store。
+- 右侧 `data-testid="whiteboard-panel"` 仍是入口占位，无 React Flow。
+- 手动选文件使用 `tauri-plugin-dialog`，filter 仅 `exe` / `lnk`。
+- Playwright 主链路留给 pkg-06。
