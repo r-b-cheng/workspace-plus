@@ -1,6 +1,6 @@
 # pkg-10 同一软件的多窗口管理
 
-状态：pending  
+状态：completed  
 依赖：pkg-09  
 可并行：pkg-11
 
@@ -42,3 +42,5 @@ Chrome、VS Code 这类软件经常同时开多个窗口。本包让用户按窗
 - 两个窗口能分开切
 - 关掉一个不影响另一个
 - 前端看不到 HWND
+
+真桌面请勾 `chrome-windows-manual-acceptance.md`。自动测试只用 mock，不要当成已切过真实 Chrome。

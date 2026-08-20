@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 
 import { appApi } from '@/features/api/app-api';
+import { windowApi } from '@/features/api/window-api';
 import { AppApiError } from '@/features/api/tauri-client';
 import { canFocusWorkspaceApp, statusFromErrorCode } from '@/features/windows/window-status';
 import { ERROR_CODES, userMessageForError } from '@/lib/errors';
-import type { CommandError, InstalledApp, WorkspaceApp } from '@/lib/types';
+import type { CommandError, InstalledApp, WorkspaceApp, WorkspaceAppWindow } from '@/lib/types';
 
 export type WorkspaceAppStoreData = {
   installedApps: InstalledApp[];
@@ -18,6 +19,9 @@ export type WorkspaceAppStoreData = {
   refreshingInstalledApps: boolean;
   launchingInstalledAppIds: string[];
   pendingWorkspaceAppIds: string[];
+  windowsByWorkspaceAppId: Record<string, WorkspaceAppWindow[]>;
+  windowsLoadingIds: string[];
+  expandedWorkspaceAppIds: string[];
   appError: CommandError | null;
 };
 
@@ -36,6 +40,9 @@ export type WorkspaceAppStore = WorkspaceAppStoreData & {
   handleInstalledAppAction: (workspaceId: string, app: InstalledApp) => Promise<void>;
   addManualAndOpen: (workspaceId: string) => Promise<void>;
   removeWorkspaceApp: (workspaceAppId: string) => Promise<void>;
+  loadWorkspaceAppWindows: (workspaceAppId: string) => Promise<void>;
+  toggleWorkspaceAppWindows: (workspaceAppId: string) => Promise<void>;
+  focusNativeWindow: (windowId: string, workspaceAppId: string) => Promise<WorkspaceApp | null>;
   clearWorkspaceApps: () => void;
   syncWorkspaceAppCount: (workspaceId: string) => number;
   clearAppError: () => void;
@@ -77,6 +84,9 @@ export const initialWorkspaceAppStoreData: WorkspaceAppStoreData = {
   refreshingInstalledApps: false,
   launchingInstalledAppIds: [],
   pendingWorkspaceAppIds: [],
+  windowsByWorkspaceAppId: {},
+  windowsLoadingIds: [],
+  expandedWorkspaceAppIds: [],
   appError: null,
 };
 
@@ -380,11 +390,16 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
       const removed = get().workspaceApps.find((app) => app.id === workspaceAppId);
       const workspaceApps = get().workspaceApps.filter((app) => app.id !== workspaceAppId);
       const workspaceId = get().currentWorkspaceId;
+      const { [workspaceAppId]: _removedWindows, ...windowsByWorkspaceAppId } =
+        get().windowsByWorkspaceAppId;
       set({
         workspaceApps,
         workspaceAppsByWorkspaceId: workspaceId
           ? { ...get().workspaceAppsByWorkspaceId, [workspaceId]: workspaceApps }
           : get().workspaceAppsByWorkspaceId,
+        windowsByWorkspaceAppId,
+        windowsLoadingIds: withoutId(get().windowsLoadingIds, workspaceAppId),
+        expandedWorkspaceAppIds: withoutId(get().expandedWorkspaceAppIds, workspaceAppId),
         pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
         installedApps: removed
           ? get().installedApps.map((app) =>
@@ -397,6 +412,107 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
         pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
         appError: toCommandError(error),
       });
+    }
+  },
+
+  async loadWorkspaceAppWindows(workspaceAppId) {
+    set({
+      windowsLoadingIds: uniqueIds(get().windowsLoadingIds, workspaceAppId),
+    });
+    try {
+      const windows = await windowApi.listWorkspaceAppWindows({ workspaceAppId });
+      set({
+        windowsByWorkspaceAppId: {
+          ...get().windowsByWorkspaceAppId,
+          [workspaceAppId]: windows,
+        },
+        windowsLoadingIds: withoutId(get().windowsLoadingIds, workspaceAppId),
+      });
+    } catch (error) {
+      set({
+        windowsLoadingIds: withoutId(get().windowsLoadingIds, workspaceAppId),
+        appError: toCommandError(error),
+      });
+    }
+  },
+
+  async toggleWorkspaceAppWindows(workspaceAppId) {
+    const expanded = get().expandedWorkspaceAppIds.includes(workspaceAppId);
+    if (expanded) {
+      set({
+        expandedWorkspaceAppIds: withoutId(get().expandedWorkspaceAppIds, workspaceAppId),
+      });
+      return;
+    }
+    set({
+      expandedWorkspaceAppIds: uniqueIds(get().expandedWorkspaceAppIds, workspaceAppId),
+    });
+    await get().loadWorkspaceAppWindows(workspaceAppId);
+  },
+
+  async focusNativeWindow(windowId, workspaceAppId) {
+    set({
+      pendingWorkspaceAppIds: uniqueIds(get().pendingWorkspaceAppIds, workspaceAppId),
+      appError: null,
+    });
+
+    try {
+      const focused = await windowApi.focusNativeWindow({ windowId });
+      const workspaceId = focused.workspaceId;
+      const stillCurrent = get().currentWorkspaceId === workspaceId;
+      const cached = upsertWorkspaceApp(
+        stillCurrent
+          ? get().workspaceApps
+          : (get().workspaceAppsByWorkspaceId[workspaceId] ?? []),
+        focused,
+      );
+      set({
+        workspaceApps: stillCurrent ? cached : get().workspaceApps,
+        workspaceAppsByWorkspaceId: {
+          ...get().workspaceAppsByWorkspaceId,
+          [workspaceId]: cached,
+        },
+        pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
+      });
+      await get().loadWorkspaceAppWindows(workspaceAppId);
+      return focused;
+    } catch (error) {
+      const appError = toCommandError(error);
+      set({
+        pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
+        appError,
+      });
+      try {
+        const windows = await windowApi.listWorkspaceAppWindows({ workspaceAppId });
+        const hasRunning = windows.some((item) => item.status === 'running');
+        const workspaceApps = get().workspaceApps.map((app) =>
+          app.id === workspaceAppId
+            ? {
+                ...app,
+                status: hasRunning
+                  ? app.status
+                  : appError.code === ERROR_CODES.FOCUS_DENIED
+                    ? 'running'
+                    : statusFromErrorCode(appError.code),
+                errorMessage: appError.message,
+              }
+            : app,
+        );
+        const workspaceId = get().currentWorkspaceId;
+        set({
+          windowsByWorkspaceAppId: {
+            ...get().windowsByWorkspaceAppId,
+            [workspaceAppId]: windows,
+          },
+          workspaceApps,
+          workspaceAppsByWorkspaceId: workspaceId
+            ? { ...get().workspaceAppsByWorkspaceId, [workspaceId]: workspaceApps }
+            : get().workspaceAppsByWorkspaceId,
+        });
+      } catch {
+        // Keep the local list; the banner already shows the focus error.
+      }
+      return null;
     }
   },
 

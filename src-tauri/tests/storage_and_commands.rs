@@ -523,6 +523,135 @@ fn app_settings_records_registration_failure() {
     );
 }
 
+#[test]
+fn same_app_can_bind_two_windows_and_close_one() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("多窗口", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let chrome_exe = r"C:\Program Files\Google\Chrome\Application\chrome.exe";
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.adapter
+        .open_window("Inbox - Google Chrome", chrome_exe);
+
+    let listed = env
+        .service
+        .list_workspace_app_windows(&launched.id)
+        .unwrap();
+    let running: Vec<_> = listed.iter().filter(|item| item.status == "running").collect();
+    assert_eq!(running.len(), 2);
+    assert!(listed.iter().any(|item| item.title.contains("Inbox")));
+    let json = serde_json::to_string(&listed).unwrap();
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+    assert!(!json.contains("externalWindowId"));
+    assert!(!json.contains("external_window_id"));
+    assert!(json.contains("workspaceAppId"));
+
+    env.adapter.close_window(&first_external);
+    let after_close = env
+        .service
+        .list_workspace_app_windows(&launched.id)
+        .unwrap();
+    assert_eq!(
+        after_close
+            .iter()
+            .filter(|item| item.status == "running")
+            .count(),
+        1
+    );
+    assert_eq!(
+        after_close
+            .iter()
+            .filter(|item| item.status == "closed")
+            .count(),
+        1
+    );
+
+    let focused = env.service.focus_workspace_app(&launched.id).unwrap();
+    assert_eq!(focused.status, "running");
+
+    let closed = after_close
+        .iter()
+        .find(|item| item.status == "closed")
+        .unwrap();
+    let still_running = after_close
+        .iter()
+        .find(|item| item.status == "running")
+        .unwrap();
+    env.service
+        .focus_native_window(&still_running.id)
+        .unwrap();
+    let err = env
+        .service
+        .focus_native_window(&closed.id)
+        .unwrap_err();
+    assert_eq!(err.code, "WindowClosed");
+
+    let remaining = env
+        .service
+        .list_workspace_app_windows(&launched.id)
+        .unwrap();
+    assert_eq!(
+        remaining
+            .iter()
+            .filter(|item| item.status == "running")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn default_focus_keeps_app_running_when_sibling_windows_remain() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("多窗口默认聚焦", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let chrome_exe = r"C:\Program Files\Google\Chrome\Application\chrome.exe";
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.adapter.open_window("Docs - Google Chrome", chrome_exe);
+    env.adapter.open_window("Mail - Google Chrome", chrome_exe);
+    env.service
+        .list_workspace_app_windows(&launched.id)
+        .unwrap();
+    env.adapter.close_window(&first_external);
+
+    let focused = env.service.focus_workspace_app(&launched.id).unwrap();
+    assert_eq!(focused.status, "running");
+    assert_ne!(focused.native_window_id.as_deref(), Some(first_external.as_str()));
+
+    let listed = env
+        .service
+        .list_workspace_app_windows(&launched.id)
+        .unwrap();
+    assert!(listed.iter().any(|item| item.status == "running"));
+}
+
 fn base64_png() -> String {
     // 1x1 transparent PNG
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2n2ZcAAAAASUVORK5CYII=".to_string()

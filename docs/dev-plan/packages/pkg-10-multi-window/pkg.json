@@ -2,7 +2,7 @@
   "id": "pkg-10-multi-window",
   "seq": 10,
   "title": "同一软件的多窗口管理",
-  "status": "pending",
+  "status": "completed",
   "dependsOn": [
     "pkg-09-p0-acceptance"
   ],
@@ -61,25 +61,25 @@
     {
       "id": "s10-01",
       "title": "扩展窗口绑定模型",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "同一软件多窗口可落库，前端仍只见不透明 id。"
     },
     {
       "id": "s10-02",
       "title": "枚举并刷新当前软件窗口",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "刷新时按进程/标题匹配，失效项标关闭。"
     },
     {
       "id": "s10-03",
       "title": "卡片上的窗口列表",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "可展开、选择、聚焦；默认仍点卡片切最近窗口。"
     },
     {
       "id": "s10-04",
       "title": "测试",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "Rust 覆盖多绑定与失效；前端覆盖列表选择。真桌面人工验。"
     }
   ],

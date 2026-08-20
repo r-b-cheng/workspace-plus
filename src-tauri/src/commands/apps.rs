@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Manager, State};
 
-use crate::domain::{InstalledApp, RemoveWorkspaceAppResult, WorkspaceApp};
+use crate::domain::{InstalledApp, RemoveWorkspaceAppResult, WorkspaceApp, WorkspaceAppWindow};
 use crate::errors::AppError;
 use crate::services::AppService;
 
@@ -81,6 +81,38 @@ pub async fn focus_workspace_app(
         handle
             .state::<AppService>()
             .focus_workspace_app(&workspace_app_id)
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_workspace_app_windows(
+    handle: AppHandle,
+    workspace_app_id: String,
+) -> Result<Vec<WorkspaceAppWindow>, AppError> {
+    if workspace_app_id.trim().is_empty() {
+        return Err(AppError::validation("workspaceAppId is required"));
+    }
+    super::run_blocking(move || {
+        handle
+            .state::<AppService>()
+            .list_workspace_app_windows(&workspace_app_id)
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn focus_native_window(
+    handle: AppHandle,
+    window_id: String,
+) -> Result<WorkspaceApp, AppError> {
+    if window_id.trim().is_empty() {
+        return Err(AppError::validation("windowId is required"));
+    }
+    super::run_blocking(move || {
+        handle
+            .state::<AppService>()
+            .focus_native_window(&window_id)
     })
     .await
 }

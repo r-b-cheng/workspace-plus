@@ -1,4 +1,11 @@
-import type { Canvas, CanvasNode, InstalledApp, Workspace, WorkspaceApp } from '@/lib/types';
+import type {
+  Canvas,
+  CanvasNode,
+  InstalledApp,
+  Workspace,
+  WorkspaceApp,
+  WorkspaceAppWindow,
+} from '@/lib/types';
 
 export function mockWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -34,6 +41,18 @@ export function mockWorkspaceApp(overrides: Partial<WorkspaceApp> = {}): Workspa
     workspaceId: 'ws-1',
     installedAppId: 'app-chrome',
     name: 'Chrome',
+    status: 'running',
+    ...overrides,
+  };
+}
+
+export function mockWorkspaceAppWindow(
+  overrides: Partial<WorkspaceAppWindow> = {},
+): WorkspaceAppWindow {
+  return {
+    id: 'nw-1',
+    workspaceAppId: 'wa-1',
+    title: 'Gmail',
     status: 'running',
     ...overrides,
   };

@@ -18,8 +18,9 @@ where
 }
 
 pub use apps::{
-    add_manual_app, focus_workspace_app, launch_workspace_app, list_installed_apps,
-    list_workspace_apps, refresh_installed_apps, remove_workspace_app, search_installed_apps,
+    add_manual_app, focus_native_window, focus_workspace_app, launch_workspace_app,
+    list_installed_apps, list_workspace_app_windows, list_workspace_apps, refresh_installed_apps,
+    remove_workspace_app, search_installed_apps,
 };
 pub use canvas::{
     delete_canvas_node, get_canvas, read_canvas_asset, save_canvas, save_canvas_asset,

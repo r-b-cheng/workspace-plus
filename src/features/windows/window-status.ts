@@ -1,5 +1,5 @@
 import { ERROR_CODES } from '@/lib/errors';
-import type { WorkspaceApp, WorkspaceAppStatus } from '@/lib/types';
+import type { WorkspaceApp, WorkspaceAppStatus, WorkspaceAppWindowStatus } from '@/lib/types';
 
 export function workspaceAppStatusLabel(status: WorkspaceAppStatus): string {
   switch (status) {
@@ -19,11 +19,11 @@ export function workspaceAppStatusLabel(status: WorkspaceAppStatus): string {
 }
 
 export function canFocusWorkspaceApp(status: WorkspaceAppStatus): boolean {
-  return status === 'running';
+  return status === 'running' || status === 'focusFailed';
 }
 
 export function canReopenWorkspaceApp(status: WorkspaceAppStatus): boolean {
-  return status === 'closed' || status === 'focusFailed' || status === 'launchFailed' || status === 'notStarted';
+  return status === 'closed' || status === 'launchFailed' || status === 'notStarted';
 }
 
 export function statusFromErrorCode(code: string): WorkspaceAppStatus {
@@ -42,4 +42,12 @@ export function displayWorkspaceAppTitle(app: WorkspaceApp): string {
     return `${app.name} - ${app.alias}`;
   }
   return app.name;
+}
+
+export function canFocusWorkspaceAppWindow(status: WorkspaceAppWindowStatus): boolean {
+  return status === 'running';
+}
+
+export function workspaceAppWindowStatusLabel(status: WorkspaceAppWindowStatus): string {
+  return status === 'closed' ? '已关闭' : '运行中';
 }

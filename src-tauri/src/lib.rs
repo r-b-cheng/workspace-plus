@@ -50,6 +50,8 @@ pub fn run() {
             commands::apps::add_manual_app,
             commands::apps::launch_workspace_app,
             commands::apps::focus_workspace_app,
+            commands::apps::list_workspace_app_windows,
+            commands::apps::focus_native_window,
             commands::apps::remove_workspace_app,
             commands::canvas::get_canvas,
             commands::canvas::save_canvas,

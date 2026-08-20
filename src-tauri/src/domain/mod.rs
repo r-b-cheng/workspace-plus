@@ -22,5 +22,7 @@ pub use settings::{
     REGISTRATION_REGISTERED, REGISTRATION_UNREGISTERED,
 };
 pub use shortcut::{classify_registration_error, normalize_shortcut, to_plugin_accelerator};
-pub use window::{NativeWindow, NativeWindowId};
+pub use window::{
+    native_window_status_to_dto, NativeWindow, NativeWindowId, WorkspaceAppWindow,
+};
 pub use workspace::{DeleteWorkspaceResult, Workspace};

@@ -1,8 +1,9 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use crate::domain::{
-    app_type_to_launch_kind, installed_app_source_to_dto, workspace_app_status_to_dto, Asset,
-    CanvasEdge, CanvasNode, InstalledApp, Workspace, WorkspaceApp,
+    app_type_to_launch_kind, installed_app_source_to_dto, native_window_status_to_dto,
+    workspace_app_status_to_dto, Asset, CanvasEdge, CanvasNode, InstalledApp, Workspace,
+    WorkspaceApp, WorkspaceAppWindow,
 };
 use crate::errors::AppError;
 
@@ -663,11 +664,11 @@ pub fn native_window_bound_external_ids(
     let mut stmt = conn.prepare(
         "SELECT nw.external_window_id
          FROM native_windows nw
-         INNER JOIN workspace_apps wa ON wa.last_window_id = nw.id
+         INNER JOIN workspace_apps wa ON wa.id = nw.workspace_app_id
          WHERE wa.deleted_at IS NULL
            AND nw.deleted_at IS NULL
            AND nw.status = 'running'
-           AND (?1 IS NULL OR wa.id != ?1)",
+           AND (?1 IS NULL OR nw.workspace_app_id != ?1)",
     )?;
     let rows = stmt.query_map(params![except_workspace_app_id], |row| row.get(0))?;
     collect_rows(rows)
@@ -710,6 +711,180 @@ pub fn workspace_app_bind_window(
          SET last_window_id = ?1, status = ?2, last_focused_at = ?3, updated_at = ?3
          WHERE id = ?4",
         params![last_window_id, status, now, id],
+    )?;
+    Ok(())
+}
+
+pub fn workspace_app_set_last_window(
+    conn: &Connection,
+    id: &str,
+    last_window_id: Option<&str>,
+    status: &str,
+    now: &str,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE workspace_apps
+         SET last_window_id = ?1, status = ?2, updated_at = ?3
+         WHERE id = ?4",
+        params![last_window_id, status, now, id],
+    )?;
+    Ok(())
+}
+
+#[derive(Clone, Debug)]
+pub struct NativeWindowRow {
+    pub id: String,
+    pub workspace_id: String,
+    pub workspace_app_id: String,
+    pub external_window_id: String,
+    pub process_id: Option<i64>,
+    pub process_path: Option<String>,
+    pub title: Option<String>,
+    pub last_seen_at: String,
+    pub last_focused_at: Option<String>,
+    pub status: String,
+}
+
+fn map_native_window_row(row: &Row<'_>) -> rusqlite::Result<NativeWindowRow> {
+    Ok(NativeWindowRow {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        workspace_app_id: row.get(2)?,
+        external_window_id: row.get(3)?,
+        process_id: row.get(4)?,
+        process_path: row.get(5)?,
+        title: row.get(6)?,
+        last_seen_at: row.get(7)?,
+        last_focused_at: row.get(8)?,
+        status: row.get(9)?,
+    })
+}
+
+const NATIVE_WINDOW_ROW_COLUMNS: &str = "id, workspace_id, workspace_app_id, external_window_id,
+            process_id, process_path, title, last_seen_at, last_focused_at, status";
+
+pub fn native_window_get(conn: &Connection, id: &str) -> Result<Option<NativeWindowRow>, AppError> {
+    let row = conn
+        .query_row(
+            &format!(
+                "SELECT {NATIVE_WINDOW_ROW_COLUMNS}
+                 FROM native_windows
+                 WHERE id = ?1 AND deleted_at IS NULL"
+            ),
+            [id],
+            map_native_window_row,
+        )
+        .optional()?;
+    Ok(row)
+}
+
+pub fn native_window_find_by_external(
+    conn: &Connection,
+    workspace_app_id: &str,
+    external_window_id: &str,
+) -> Result<Option<NativeWindowRow>, AppError> {
+    let row = conn
+        .query_row(
+            &format!(
+                "SELECT {NATIVE_WINDOW_ROW_COLUMNS}
+                 FROM native_windows
+                 WHERE workspace_app_id = ?1 AND external_window_id = ?2 AND deleted_at IS NULL
+                 ORDER BY CASE WHEN status = 'running' THEN 0 ELSE 1 END, updated_at DESC
+                 LIMIT 1"
+            ),
+            params![workspace_app_id, external_window_id],
+            map_native_window_row,
+        )
+        .optional()?;
+    Ok(row)
+}
+
+pub fn native_window_list_rows(
+    conn: &Connection,
+    workspace_app_id: &str,
+) -> Result<Vec<NativeWindowRow>, AppError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {NATIVE_WINDOW_ROW_COLUMNS}
+         FROM native_windows
+         WHERE workspace_app_id = ?1 AND deleted_at IS NULL"
+    ))?;
+    let rows = stmt.query_map([workspace_app_id], map_native_window_row)?;
+    collect_rows(rows)
+}
+
+pub fn native_window_list_dto(
+    conn: &Connection,
+    workspace_app_id: &str,
+) -> Result<Vec<WorkspaceAppWindow>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, workspace_app_id, title, status, last_focused_at
+         FROM native_windows
+         WHERE workspace_app_id = ?1 AND deleted_at IS NULL
+         ORDER BY CASE WHEN status = 'running' THEN 0 ELSE 1 END,
+                  CASE WHEN last_focused_at IS NULL THEN 1 ELSE 0 END,
+                  last_focused_at DESC,
+                  last_seen_at DESC,
+                  updated_at DESC",
+    )?;
+    let rows = stmt.query_map([workspace_app_id], |row| {
+        Ok(WorkspaceAppWindow {
+            id: row.get(0)?,
+            workspace_app_id: row.get(1)?,
+            title: row
+                .get::<_, Option<String>>(2)?
+                .unwrap_or_default(),
+            status: native_window_status_to_dto(&row.get::<_, String>(3)?),
+            last_focused_at: row.get(4)?,
+        })
+    })?;
+    collect_rows(rows)
+}
+
+pub fn native_window_is_running(conn: &Connection, id: &str) -> Result<bool, AppError> {
+    let status: Option<String> = conn
+        .query_row(
+            "SELECT status FROM native_windows
+             WHERE id = ?1 AND deleted_at IS NULL",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(status.as_deref() == Some("running"))
+}
+
+pub fn native_window_most_recent_running_id(
+    conn: &Connection,
+    workspace_app_id: &str,
+) -> Result<Option<String>, AppError> {
+    let id = conn
+        .query_row(
+            "SELECT id FROM native_windows
+             WHERE workspace_app_id = ?1 AND deleted_at IS NULL AND status = 'running'
+             ORDER BY CASE WHEN last_focused_at IS NULL THEN 1 ELSE 0 END,
+                      last_focused_at DESC,
+                      last_seen_at DESC
+             LIMIT 1",
+            [workspace_app_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(id)
+}
+
+pub fn native_window_update_seen(
+    conn: &Connection,
+    id: &str,
+    title: Option<&str>,
+    process_id: Option<i64>,
+    process_path: Option<&str>,
+    now: &str,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE native_windows
+         SET title = ?1, process_id = ?2, process_path = ?3,
+             last_seen_at = ?4, status = 'running', updated_at = ?4
+         WHERE id = ?5",
+        params![title, process_id, process_path, now, id],
     )?;
     Ok(())
 }

@@ -317,6 +317,17 @@ pub fn pick_focus_window(
     None
 }
 
+/// Process-identity matches, excluding `hint.exclude_window_ids`.
+pub fn list_matching_windows<'a>(
+    windows: &'a [PlatformWindow],
+    hint: &WindowMatchHint,
+) -> Vec<&'a PlatformWindow> {
+    matching_windows(windows, hint)
+        .into_iter()
+        .map(|(_, window)| window)
+        .collect()
+}
+
 fn matching_windows<'a>(
     windows: &'a [PlatformWindow],
     hint: &WindowMatchHint,

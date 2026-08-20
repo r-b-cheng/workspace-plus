@@ -1,13 +1,19 @@
 import { Button } from '@/components/ui/button';
+import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
 import {
+  canFocusWorkspaceApp,
+  canFocusWorkspaceAppWindow,
   canReopenWorkspaceApp,
   displayWorkspaceAppTitle,
   workspaceAppStatusLabel,
+  workspaceAppWindowStatusLabel,
 } from '@/features/windows/window-status';
-import type { WorkspaceApp } from '@/lib/types';
+import type { WorkspaceApp, WorkspaceAppWindow } from '@/lib/types';
 
 export const REMOVE_WORKSPACE_APP_COPY = '移出工作区不会关闭真实窗口，也不会卸载软件。';
 export const WINDOW_CLOSED_HINT = '窗口已关闭，可以重新打开。';
+
+const EMPTY_WINDOWS: WorkspaceAppWindow[] = [];
 
 type WorkspaceAppCardProps = {
   app: WorkspaceApp;
@@ -25,6 +31,19 @@ export function WorkspaceAppCard({
   onRemove,
 }: WorkspaceAppCardProps) {
   const showReopen = canReopenWorkspaceApp(app.status);
+  const windows = useWorkspaceAppStore(
+    (state) => state.windowsByWorkspaceAppId[app.id] ?? EMPTY_WINDOWS,
+  );
+  const windowsExpanded = useWorkspaceAppStore((state) =>
+    state.expandedWorkspaceAppIds.includes(app.id),
+  );
+  const windowsLoading = useWorkspaceAppStore((state) =>
+    state.windowsLoadingIds.includes(app.id),
+  );
+  const toggleWorkspaceAppWindows = useWorkspaceAppStore(
+    (state) => state.toggleWorkspaceAppWindows,
+  );
+  const focusNativeWindow = useWorkspaceAppStore((state) => state.focusNativeWindow);
 
   return (
     <article
@@ -50,7 +69,7 @@ export function WorkspaceAppCard({
         ) : null}
       </button>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {app.status === 'running' ? (
+        {canFocusWorkspaceApp(app.status) ? (
           <Button
             variant="ghost"
             className="h-auto w-fit rounded-lg bg-accent px-2.5 py-2 text-accent-foreground"
@@ -60,6 +79,15 @@ export function WorkspaceAppCard({
             切换窗口
           </Button>
         ) : null}
+        <Button
+          variant="ghost"
+          className="h-auto w-fit rounded-lg px-2.5 py-2 text-muted-foreground"
+          data-testid="workspace-app-windows-toggle"
+          disabled={pending}
+          onClick={() => void toggleWorkspaceAppWindows(app.id)}
+        >
+          窗口列表
+        </Button>
         {showReopen ? (
           <Button
             variant="ghost"
@@ -82,6 +110,49 @@ export function WorkspaceAppCard({
           移出工作区
         </Button>
       </div>
+      {windowsExpanded ? (
+        <ul className="mt-3 grid gap-1" data-testid="workspace-app-windows">
+          {windowsLoading && windows.length === 0 ? (
+            <li className="text-sm text-muted-foreground">正在加载窗口…</li>
+          ) : null}
+          {windows.map((item) => (
+            <li key={item.id}>
+              {canFocusWorkspaceAppWindow(item.status) ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  data-testid="workspace-app-window-item"
+                  data-window-status={item.status}
+                  disabled={pending}
+                  onClick={() => void focusNativeWindow(item.id, app.id)}
+                >
+                  <span>{item.title || '未命名窗口'}</span>
+                  <span className="text-muted-foreground">{workspaceAppWindowStatusLabel(item.status)}</span>
+                </button>
+              ) : (
+                <div
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm"
+                  data-testid="workspace-app-window-item"
+                  data-window-status={item.status}
+                >
+                  <span className="text-muted-foreground">{item.title || '未命名窗口'}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-destructive">{workspaceAppWindowStatusLabel(item.status)}</span>
+                    <Button
+                      variant="ghost"
+                      className="h-auto w-fit px-2 py-1 text-xs"
+                      disabled={pending || app.status === 'launching'}
+                      onClick={() => onReopen(app)}
+                    >
+                      重新打开
+                    </Button>
+                  </span>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </article>
   );
 }

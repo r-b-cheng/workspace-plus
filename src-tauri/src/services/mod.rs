@@ -11,8 +11,8 @@ use rusqlite::Connection;
 use crate::domain::{
     normalize_shortcut, AppSettings, Asset, Canvas, CanvasAssetContent, CanvasEdge,
     CanvasEdgeInput, CanvasNode, CanvasNodeInput, DeleteWorkspaceResult, InstalledApp,
-    RemoveWorkspaceAppResult, Workspace, WorkspaceApp, DEFAULT_QUICK_SWITCH_SHORTCUT,
-    REGISTRATION_UNREGISTERED,
+    RemoveWorkspaceAppResult, Workspace, WorkspaceApp, WorkspaceAppWindow,
+    DEFAULT_QUICK_SWITCH_SHORTCUT, REGISTRATION_UNREGISTERED,
 };
 use crate::errors::AppError;
 use crate::platform::{
@@ -20,7 +20,7 @@ use crate::platform::{
     ResolveManualAppTargetRequest, ScanInstalledAppsRequest, ScannedApp,
 };
 use crate::platform::rules::{
-    is_executable_path, path_extension, pick_focus_window, WindowMatchHint,
+    is_executable_path, list_matching_windows, path_extension, pick_focus_window, WindowMatchHint,
 };
 use crate::storage::{
     self, new_id, normalize_name, now_utc, open_database, sha256_hex, AppPaths, InstalledAppRow,
@@ -492,7 +492,6 @@ impl AppService {
         );
         hint.exclude_window_ids = exclude_window_ids;
 
-        let stored_id = binding.as_ref().map(|item| item.external_window_id.clone());
         let windows = match self.adapter.list_windows(&ListWindowsRequest::default()) {
             Ok(windows) => windows,
             Err(_) => Vec::new(),
@@ -500,28 +499,7 @@ impl AppService {
         let target = pick_focus_window(&windows, &hint);
 
         let Some(target) = target else {
-            if let Some(window_row_id) = workspace_app.last_window_id.as_deref() {
-                let conn = self.lock_db()?;
-                let now = now_utc();
-                storage::native_window_mark_closed(&conn, window_row_id, &now)?;
-                storage::workspace_app_update_focus(
-                    &conn,
-                    workspace_app_id,
-                    "window_closed",
-                    None,
-                    &now,
-                )?;
-            } else {
-                let conn = self.lock_db()?;
-                storage::workspace_app_update_focus(
-                    &conn,
-                    workspace_app_id,
-                    "window_closed",
-                    None,
-                    &now_utc(),
-                )?;
-            }
-            return Err(AppError::window_closed("workspace app has no open window"));
+            return self.focus_sibling_or_close(workspace_app_id, &workspace_id, None);
         };
 
         match self.adapter.focus_window(&FocusWindowRequest {
@@ -531,13 +509,229 @@ impl AppService {
                 let mut conn = self.lock_db()?;
                 let tx = conn.transaction()?;
                 let now = now_utc();
-                bind_discovered_window(
-                    &tx,
-                    &workspace_id,
+                bind_discovered_window(&tx, &workspace_id, workspace_app_id, &target, &now)?;
+                tx.commit()?;
+                storage::workspace_app_list_dto(&conn, &workspace_id)?
+                    .into_iter()
+                    .find(|item| item.id == workspace_app_id)
+                    .ok_or_else(|| AppError::not_found("workspace app not found"))
+            }
+            Err(err) if err.code.as_str() == "WindowClosed" => {
+                self.focus_sibling_or_close(
                     workspace_app_id,
-                    workspace_app.last_window_id.as_deref(),
-                    stored_id.as_deref(),
-                    &target,
+                    &workspace_id,
+                    Some(target.native_window_id.as_str()),
+                )
+                .map_err(|_| err.into())
+            }
+            Err(err) if err.code.as_str() == "FocusDenied" => {
+                let mut conn = self.lock_db()?;
+                let tx = conn.transaction()?;
+                let now = now_utc();
+                bind_discovered_window(&tx, &workspace_id, workspace_app_id, &target, &now)?;
+                tx.commit()?;
+                Err(err.into())
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    fn focus_sibling_or_close(
+        &self,
+        workspace_app_id: &str,
+        workspace_id: &str,
+        closed_external_id: Option<&str>,
+    ) -> Result<WorkspaceApp, AppError> {
+        let sibling = {
+            let conn = self.lock_db()?;
+            let now = now_utc();
+            if let Some(external_id) = closed_external_id {
+                if let Some(closed_row) = storage::native_window_find_by_external(
+                    &conn,
+                    workspace_app_id,
+                    external_id,
+                )? {
+                    storage::native_window_mark_closed(&conn, &closed_row.id, &now)?;
+                }
+            } else if let Some(row) = storage::workspace_app_get(&conn, workspace_app_id)? {
+                if let Some(window_row_id) = row.last_window_id.as_deref() {
+                    storage::native_window_mark_closed(&conn, window_row_id, &now)?;
+                }
+            }
+            if let Some(next_id) =
+                storage::native_window_most_recent_running_id(&conn, workspace_app_id)?
+            {
+                storage::workspace_app_set_last_window(
+                    &conn,
+                    workspace_app_id,
+                    Some(&next_id),
+                    "running",
+                    &now,
+                )?;
+                storage::native_window_get_binding(&conn, &next_id)?
+            } else {
+                storage::workspace_app_update_focus(
+                    &conn,
+                    workspace_app_id,
+                    "window_closed",
+                    None,
+                    &now,
+                )?;
+                None
+            }
+        };
+        let Some(sibling) = sibling else {
+            return Err(AppError::window_closed("workspace app has no open window"));
+        };
+        match self.adapter.focus_window(&FocusWindowRequest {
+            native_window_id: sibling.external_window_id.clone(),
+        }) {
+            Ok(_) => {
+                let window = PlatformWindow {
+                    native_window_id: sibling.external_window_id.clone(),
+                    process_id: sibling.process_id.map(|value| value as u32),
+                    title: sibling.title.clone().unwrap_or_default(),
+                    process_path: sibling.process_path.clone(),
+                };
+                let mut conn = self.lock_db()?;
+                let tx = conn.transaction()?;
+                let now = now_utc();
+                bind_discovered_window(&tx, workspace_id, workspace_app_id, &window, &now)?;
+                tx.commit()?;
+                storage::workspace_app_list_dto(&conn, workspace_id)?
+                    .into_iter()
+                    .find(|item| item.id == workspace_app_id)
+                    .ok_or_else(|| AppError::not_found("workspace app not found"))
+            }
+            Err(err) if err.code.as_str() == "WindowClosed" => {
+                let conn = self.lock_db()?;
+                let now = now_utc();
+                storage::native_window_mark_closed(&conn, &sibling.id, &now)?;
+                if let Some(next_id) =
+                    storage::native_window_most_recent_running_id(&conn, workspace_app_id)?
+                {
+                    storage::workspace_app_set_last_window(
+                        &conn,
+                        workspace_app_id,
+                        Some(&next_id),
+                        "running",
+                        &now,
+                    )?;
+                } else {
+                    storage::workspace_app_update_focus(
+                        &conn,
+                        workspace_app_id,
+                        "window_closed",
+                        None,
+                        &now,
+                    )?;
+                }
+                Err(err.into())
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub fn list_workspace_app_windows(
+        &self,
+        workspace_app_id: &str,
+    ) -> Result<Vec<WorkspaceAppWindow>, AppError> {
+        self.refresh_workspace_app_windows(workspace_app_id)?;
+        let conn = self.lock_db()?;
+        storage::native_window_list_dto(&conn, workspace_app_id)
+    }
+
+    pub fn refresh_workspace_app_windows(&self, workspace_app_id: &str) -> Result<(), AppError> {
+        let (workspace_id, installed_app, workspace_app, exclude_window_ids) = {
+            let conn = self.lock_db()?;
+            let row = storage::workspace_app_get(&conn, workspace_app_id)?
+                .filter(|item| item.deleted_at.is_none())
+                .ok_or_else(|| AppError::not_found("workspace app not found"))?;
+            let app = storage::installed_app_get(&conn, &row.installed_app_id)?
+                .ok_or_else(|| AppError::not_found("installed app not found"))?;
+            let exclude_window_ids =
+                storage::native_window_bound_external_ids(&conn, Some(&row.id))?;
+            (row.workspace_id.clone(), app, row, exclude_window_ids)
+        };
+
+        let display_name = workspace_app
+            .display_alias
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(&installed_app.display_name)
+            .to_string();
+        let hint = WindowMatchHint {
+            process_id: None,
+            process_path: None,
+            executable_path: known_executable_path(
+                installed_app.executable_path.as_deref(),
+                Some(installed_app.launch_target.as_str()),
+            ),
+            launch_target: Some(installed_app.launch_target.clone()),
+            install_location: installed_app.install_location.clone(),
+            display_name,
+            title_hint: None,
+            stored_window_id: None,
+            exclude_window_ids,
+        };
+
+        let desktop = match self.adapter.list_windows(&ListWindowsRequest::default()) {
+            Ok(windows) => windows,
+            Err(_) => return Ok(()),
+        };
+        let matched: Vec<PlatformWindow> = list_matching_windows(&desktop, &hint)
+            .into_iter()
+            .cloned()
+            .collect();
+
+        let mut conn = self.lock_db()?;
+        let tx = conn.transaction()?;
+        sync_workspace_app_windows(
+            &tx,
+            &workspace_id,
+            workspace_app_id,
+            &installed_app.platform,
+            workspace_app.last_window_id.as_deref(),
+            &workspace_app.status,
+            &matched,
+            &now_utc(),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn focus_native_window(&self, window_id: &str) -> Result<WorkspaceApp, AppError> {
+        let (workspace_id, workspace_app_id, row) = {
+            let conn = self.lock_db()?;
+            let row = storage::native_window_get(&conn, window_id)?
+                .ok_or_else(|| AppError::not_found("window not found"))?;
+            let workspace_app = storage::workspace_app_get(&conn, &row.workspace_app_id)?
+                .filter(|item| item.deleted_at.is_none())
+                .ok_or_else(|| AppError::not_found("workspace app not found"))?;
+            if row.status != "running" {
+                return Err(AppError::window_closed("window is closed"));
+            }
+            (
+                workspace_app.workspace_id.clone(),
+                workspace_app.id,
+                row,
+            )
+        };
+
+        match self.adapter.focus_window(&FocusWindowRequest {
+            native_window_id: row.external_window_id.clone(),
+        }) {
+            Ok(_) => {
+                let mut conn = self.lock_db()?;
+                let tx = conn.transaction()?;
+                let now = now_utc();
+                storage::native_window_touch_focus(&tx, &row.id, &now)?;
+                storage::workspace_app_bind_window(
+                    &tx,
+                    &workspace_app_id,
+                    &row.id,
+                    "running",
                     &now,
                 )?;
                 tx.commit()?;
@@ -547,31 +741,46 @@ impl AppService {
                     .ok_or_else(|| AppError::not_found("workspace app not found"))
             }
             Err(err) if err.code.as_str() == "WindowClosed" => {
-                let conn = self.lock_db()?;
+                let mut conn = self.lock_db()?;
+                let tx = conn.transaction()?;
                 let now = now_utc();
-                if let Some(window_row_id) = workspace_app.last_window_id.as_deref() {
-                    storage::native_window_mark_closed(&conn, window_row_id, &now)?;
+                storage::native_window_mark_closed(&tx, &row.id, &now)?;
+                let workspace_app = storage::workspace_app_get(&tx, &workspace_app_id)?
+                    .ok_or_else(|| AppError::not_found("workspace app not found"))?;
+                if workspace_app.last_window_id.as_deref() == Some(row.id.as_str()) {
+                    if let Some(next_id) =
+                        storage::native_window_most_recent_running_id(&tx, &workspace_app_id)?
+                    {
+                        storage::workspace_app_set_last_window(
+                            &tx,
+                            &workspace_app_id,
+                            Some(&next_id),
+                            "running",
+                            &now,
+                        )?;
+                    } else {
+                        storage::workspace_app_update_focus(
+                            &tx,
+                            &workspace_app_id,
+                            "window_closed",
+                            None,
+                            &now,
+                        )?;
+                    }
                 }
-                storage::workspace_app_update_focus(
-                    &conn,
-                    workspace_app_id,
-                    "window_closed",
-                    None,
-                    &now,
-                )?;
+                tx.commit()?;
                 Err(err.into())
             }
             Err(err) if err.code.as_str() == "FocusDenied" => {
                 let mut conn = self.lock_db()?;
                 let tx = conn.transaction()?;
                 let now = now_utc();
-                bind_discovered_window(
+                storage::native_window_touch_focus(&tx, &row.id, &now)?;
+                storage::workspace_app_bind_window(
                     &tx,
-                    &workspace_id,
-                    workspace_app_id,
-                    workspace_app.last_window_id.as_deref(),
-                    stored_id.as_deref(),
-                    &target,
+                    &workspace_app_id,
+                    &row.id,
+                    "running",
                     &now,
                 )?;
                 tx.commit()?;
@@ -923,10 +1132,8 @@ fn insert_running_window(
     title: Option<&str>,
     now: &str,
 ) -> Result<(), AppError> {
-    let window_row_id = new_id();
-    storage::native_window_insert(
+    let window_row_id = upsert_running_window(
         conn,
-        &window_row_id,
         workspace_id,
         workspace_app_id,
         "windows",
@@ -947,40 +1154,130 @@ fn insert_running_window(
     Ok(())
 }
 
+fn upsert_running_window(
+    conn: &Connection,
+    workspace_id: &str,
+    workspace_app_id: &str,
+    platform: &str,
+    native_window_id: &str,
+    process_id: Option<i64>,
+    process_path: Option<&str>,
+    title: Option<&str>,
+    now: &str,
+) -> Result<String, AppError> {
+    if let Some(existing) =
+        storage::native_window_find_by_external(conn, workspace_app_id, native_window_id)?
+    {
+        storage::native_window_update_seen(
+            conn,
+            &existing.id,
+            title,
+            process_id,
+            process_path,
+            now,
+        )?;
+        return Ok(existing.id);
+    }
+
+    let window_row_id = new_id();
+    storage::native_window_insert(
+        conn,
+        &window_row_id,
+        workspace_id,
+        workspace_app_id,
+        platform,
+        native_window_id,
+        process_id,
+        process_path,
+        title,
+        now,
+    )?;
+    Ok(window_row_id)
+}
+
 fn bind_discovered_window(
     conn: &Connection,
     workspace_id: &str,
     workspace_app_id: &str,
-    previous_window_row_id: Option<&str>,
-    stored_external_id: Option<&str>,
     window: &PlatformWindow,
     now: &str,
 ) -> Result<(), AppError> {
-    let window_row_id = if stored_external_id == Some(window.native_window_id.as_str()) {
-        previous_window_row_id
-            .map(ToOwned::to_owned)
-            .unwrap_or_else(new_id)
-    } else {
-        if let Some(old_id) = previous_window_row_id {
-            storage::native_window_mark_closed(conn, old_id, now)?;
-        }
-        let window_row_id = new_id();
-        storage::native_window_insert(
+    let window_row_id = upsert_running_window(
+        conn,
+        workspace_id,
+        workspace_app_id,
+        "windows",
+        &window.native_window_id,
+        window.process_id.map(|value| value as i64),
+        window.process_path.as_deref(),
+        Some(window.title.as_str()),
+        now,
+    )?;
+    storage::native_window_touch_focus(conn, &window_row_id, now)?;
+    storage::workspace_app_bind_window(conn, workspace_app_id, &window_row_id, "running", now)?;
+    Ok(())
+}
+
+fn sync_workspace_app_windows(
+    conn: &Connection,
+    workspace_id: &str,
+    workspace_app_id: &str,
+    platform: &str,
+    last_window_id: Option<&str>,
+    current_status: &str,
+    matched: &[PlatformWindow],
+    now: &str,
+) -> Result<(), AppError> {
+    let mut seen = HashSet::new();
+    for window in matched {
+        seen.insert(window.native_window_id.clone());
+        upsert_running_window(
             conn,
-            &window_row_id,
             workspace_id,
             workspace_app_id,
-            "windows",
+            platform,
             &window.native_window_id,
             window.process_id.map(|value| value as i64),
             window.process_path.as_deref(),
             Some(window.title.as_str()),
             now,
         )?;
-        window_row_id
+    }
+
+    for row in storage::native_window_list_rows(conn, workspace_app_id)? {
+        if !seen.contains(&row.external_window_id) && row.status != "closed" {
+            storage::native_window_mark_closed(conn, &row.id, now)?;
+        }
+    }
+
+    let last_running = match last_window_id {
+        Some(id) => storage::native_window_is_running(conn, id)?,
+        None => false,
     };
-    storage::native_window_touch_focus(conn, &window_row_id, now)?;
-    storage::workspace_app_bind_window(conn, workspace_app_id, &window_row_id, "running", now)?;
+    if last_running {
+        if current_status != "running" {
+            storage::workspace_app_set_last_window(
+                conn,
+                workspace_app_id,
+                last_window_id,
+                "running",
+                now,
+            )?;
+        }
+        return Ok(());
+    }
+
+    if let Some(next_id) = storage::native_window_most_recent_running_id(conn, workspace_app_id)? {
+        storage::workspace_app_set_last_window(
+            conn,
+            workspace_app_id,
+            Some(&next_id),
+            "running",
+            now,
+        )?;
+    } else {
+        storage::workspace_app_update_focus(conn, workspace_app_id, "window_closed", None, now)?;
+    }
     Ok(())
 }
 

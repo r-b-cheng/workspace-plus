@@ -239,6 +239,24 @@ export type WorkspaceAppIdInput = {
   workspaceAppId: string;
 };
 
+export type WorkspaceAppWindowStatus = 'running' | 'closed';
+
+export type WorkspaceAppWindow = {
+  id: string;
+  workspaceAppId: string;
+  title: string;
+  status: WorkspaceAppWindowStatus;
+  lastFocusedAt?: string | null;
+};
+
+export type ListWorkspaceAppWindowsInput = {
+  workspaceAppId: string;
+};
+
+export type FocusNativeWindowInput = {
+  windowId: string;
+};
+
 export type ShortcutRegistrationStatus = 'registered' | 'conflict' | 'denied' | 'unregistered';
 
 export type AppSettings = {
