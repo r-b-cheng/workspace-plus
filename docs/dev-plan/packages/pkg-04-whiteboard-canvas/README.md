@@ -1,6 +1,6 @@
 # pkg-04 白板：Markdown、图片、拖拽缩放、自动保存
 
-状态：pending  
+状态：completed  
 依赖：pkg-01、pkg-02、pkg-03
 
 ## 目标
@@ -34,14 +34,22 @@
 
 ## 子任务
 
-| ID | 子任务 | 完成标准 |
-|---|---|---|
-| s04-01 | store 与持久化转换 | 渲染字段不入库 |
-| s04-02 | React Flow 接入右侧 | 空画布可新建 |
-| s04-03 | Markdown 卡片 | 编辑/预览/保存 |
-| s04-04 | 图片粘贴与拖入 | 文件落 assets，库中只引用 |
-| s04-05 | 防抖保存与状态 | 失败可重试 |
-| s04-06 | 切换工作区与重启 | 数据不串，内容仍在 |
+| ID | 子任务 | 状态 | 完成标准 |
+|---|---|---|---|
+| s04-01 | store 与持久化转换 | completed | 渲染字段不入库 |
+| s04-02 | React Flow 接入右侧 | completed | 空画布可新建 |
+| s04-03 | Markdown 卡片 | completed | 编辑/预览/保存 |
+| s04-04 | 图片粘贴与拖入 | completed | 文件落 assets，库中只引用 |
+| s04-05 | 防抖保存与状态 | completed | 失败可重试 |
+| s04-06 | 切换工作区与重启 | completed | 数据不串，内容仍在 |
+
+## 实现说明
+
+- `WhiteboardPanel`（`data-testid="whiteboard-panel"`）替换右侧占位，绑定当前 `selectedWorkspaceId`。
+- `toPersistedCanvasNode` / `fromPersistedCanvasNode` 只保留产品字段；`save_canvas` 写入 SQLite。
+- 图片经 `save_canvas_asset` 落盘，节点只存 `assetId`。新增 `read_canvas_asset` 返回 data URL，缺失资源显示降级。
+- 顶栏 `data-testid="save-status"` 由 canvas store 驱动，失败可点重试。
+- 切工作区立刻清空并重新 `get_canvas`；进行中的旧请求不会覆盖新画布。
 
 ## 不做
 

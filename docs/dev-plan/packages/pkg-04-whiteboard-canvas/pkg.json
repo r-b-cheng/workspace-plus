@@ -2,7 +2,7 @@
   "id": "pkg-04-whiteboard-canvas",
   "seq": 4,
   "title": "白板：Markdown、图片、拖拽缩放、自动保存",
-  "status": "pending",
+  "status": "completed",
   "dependsOn": [
     "pkg-01-engineering-foundation",
     "pkg-02-storage-and-commands",
@@ -71,37 +71,37 @@
     {
       "id": "s04-01",
       "title": "实现 canvas store 与持久化转换函数",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "toPersistedCanvasNode / fromPersistedCanvasNode 不包含 selected、dragging 等渲染字段。"
     },
     {
       "id": "s04-02",
       "title": "接入 React Flow 画布到右侧面板",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "当前工作区可平移缩放；空画布可新建卡片。"
     },
     {
       "id": "s04-03",
       "title": "实现 Markdown 卡片编辑与预览",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "双击或点击进入编辑，预览渲染 GFM；内容进入自动保存。"
     },
     {
       "id": "s04-04",
       "title": "实现图片粘贴、拖入与资源上传",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "图片进 app data assets；数据库只存引用；缺失资源有可见降级。"
     },
     {
       "id": "s04-05",
       "title": "实现防抖自动保存和保存状态",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "顶栏 save-status 在 saving/saved/save-failed 间切换；失败可重试。"
     },
     {
       "id": "s04-06",
       "title": "切换工作区与重启恢复",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "切工作区立即换画布；重新打开应用后节点仍在原工作区。"
     }
   ],

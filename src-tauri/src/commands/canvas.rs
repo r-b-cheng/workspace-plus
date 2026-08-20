@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::domain::{Asset, Canvas, CanvasEdgeInput, CanvasNode, CanvasNodeInput};
+use crate::domain::{Asset, Canvas, CanvasAssetContent, CanvasEdgeInput, CanvasNode, CanvasNodeInput};
 use crate::errors::AppError;
 use crate::services::AppService;
 
@@ -72,4 +72,15 @@ pub fn save_canvas_asset(
         mime_type.as_deref(),
         source.as_deref(),
     )
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn read_canvas_asset(
+    state: State<AppService>,
+    asset_id: String,
+) -> Result<CanvasAssetContent, AppError> {
+    if asset_id.trim().is_empty() {
+        return Err(AppError::validation("assetId is required"));
+    }
+    state.read_canvas_asset(&asset_id)
 }

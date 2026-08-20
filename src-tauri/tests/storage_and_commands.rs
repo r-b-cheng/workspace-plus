@@ -330,6 +330,18 @@ fn save_canvas_asset_writes_file_not_blob() {
     let path = env.service.paths().assets_dir.join(&asset.storage_path);
     assert!(path.is_file());
     assert!(std::fs::read(&path).unwrap().len() > 0);
+
+    let content = env.service.read_canvas_asset(&asset.id).unwrap();
+    assert_eq!(content.asset_id, asset.id);
+    assert_eq!(content.content_base64, png);
+    assert!(content.data_url.starts_with("data:image/png;base64,"));
+}
+
+#[test]
+fn read_canvas_asset_missing_is_not_found() {
+    let env = setup();
+    let err = env.service.read_canvas_asset("missing-asset").unwrap_err();
+    assert_eq!(err.code, "NotFound");
 }
 
 fn base64_png() -> String {

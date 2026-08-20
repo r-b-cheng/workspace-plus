@@ -6,13 +6,14 @@ import { filterWorkspaceApps, WorkspaceAppCardGrid } from '@/features/apps/compo
 import { WorkspaceAppTabs } from '@/features/apps/components/workspace-app-tabs';
 import { WorkspaceOverview } from '@/features/apps/components/workspace-overview';
 import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
+import { WhiteboardPanel } from '@/features/canvas/components/whiteboard-panel';
+import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import { CreateWorkspaceDialog } from '@/features/workspaces/components/create-workspace-dialog';
 import { DeleteWorkspaceDialog } from '@/features/workspaces/components/delete-workspace-dialog';
 import { EmptyWorkspacesState } from '@/features/workspaces/components/empty-workspaces-state';
 import { RenameWorkspaceDialog } from '@/features/workspaces/components/rename-workspace-dialog';
 import { WorkspaceSidebar } from '@/features/workspaces/components/workspace-sidebar';
 import { useWorkspaceStore } from '@/features/workspaces/store/workspace-store';
-import { WhiteboardPlaceholder } from '@/app/whiteboard-placeholder';
 
 export function WorkspaceShell() {
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -59,6 +60,12 @@ export function WorkspaceShell() {
   const removeWorkspaceApp = useWorkspaceAppStore((state) => state.removeWorkspaceApp);
   const syncWorkspaceAppCount = useWorkspaceAppStore((state) => state.syncWorkspaceAppCount);
 
+  const saveStatus = useCanvasStore((state) => state.saveStatus);
+  const lastSavedAt = useCanvasStore((state) => state.lastSavedAt);
+  const loadCanvas = useCanvasStore((state) => state.loadCanvas);
+  const clearCanvas = useCanvasStore((state) => state.clearCanvas);
+  const retrySave = useCanvasStore((state) => state.retrySave);
+
   const [contentQuery, setContentQuery] = useState('');
 
   const selectedWorkspace = useMemo(
@@ -82,19 +89,20 @@ export function WorkspaceShell() {
       }
       const workspaceId = useWorkspaceStore.getState().selectedWorkspaceId;
       if (workspaceId) {
-        await loadWorkspaceApps(workspaceId);
+        await Promise.all([loadWorkspaceApps(workspaceId), loadCanvas(workspaceId)]);
         useWorkspaceStore.getState().patchWorkspace(workspaceId, {
           appCount: useWorkspaceAppStore.getState().syncWorkspaceAppCount(workspaceId),
         });
       } else {
         clearWorkspaceApps();
+        clearCanvas();
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [clearWorkspaceApps, loadWorkspaceApps, loadWorkspaces]);
+  }, [clearCanvas, clearWorkspaceApps, loadCanvas, loadWorkspaceApps, loadWorkspaces]);
 
   const syncAppCount = useCallback(
     (workspaceId: string) => {
@@ -106,19 +114,23 @@ export function WorkspaceShell() {
   const handleSelectWorkspace = useCallback(
     async (workspaceId: string) => {
       setContentQuery('');
+      await loadCanvas(workspaceId);
+      if (useCanvasStore.getState().workspaceId !== workspaceId) {
+        return;
+      }
       await Promise.all([selectWorkspace(workspaceId), loadWorkspaceApps(workspaceId)]);
       syncAppCount(workspaceId);
     },
-    [loadWorkspaceApps, selectWorkspace, syncAppCount],
+    [loadCanvas, loadWorkspaceApps, selectWorkspace, syncAppCount],
   );
 
   const handleCreated = useCallback(
     async (values: { name: string; color: string }) => {
       const workspace = await createWorkspace(values);
-      await loadWorkspaceApps(workspace.id);
+      await Promise.all([loadWorkspaceApps(workspace.id), loadCanvas(workspace.id)]);
       syncAppCount(workspace.id);
     },
-    [createWorkspace, loadWorkspaceApps, syncAppCount],
+    [createWorkspace, loadCanvas, loadWorkspaceApps, syncAppCount],
   );
 
   const handleDeleted = useCallback(async () => {
@@ -128,12 +140,13 @@ export function WorkspaceShell() {
     await deleteWorkspace(deleteWorkspaceId);
     const nextId = useWorkspaceStore.getState().selectedWorkspaceId;
     if (nextId) {
-      await loadWorkspaceApps(nextId);
+      await Promise.all([loadWorkspaceApps(nextId), loadCanvas(nextId)]);
       syncAppCount(nextId);
     } else {
       clearWorkspaceApps();
+      clearCanvas();
     }
-  }, [clearWorkspaceApps, deleteWorkspace, deleteWorkspaceId, loadWorkspaceApps, syncAppCount]);
+  }, [clearCanvas, clearWorkspaceApps, deleteWorkspace, deleteWorkspaceId, loadCanvas, loadWorkspaceApps, syncAppCount]);
 
   const handleAddApp = useCallback(() => {
     if (!selectedWorkspaceId) {
@@ -176,6 +189,9 @@ export function WorkspaceShell() {
               onContentQueryChange={setContentQuery}
               onAddApp={handleAddApp}
               onSettings={() => openRenameDialog(selectedWorkspace.id)}
+              saveStatus={saveStatus}
+              lastSavedAt={lastSavedAt}
+              onRetrySave={() => void retrySave()}
             />
             <WorkspaceAppTabs apps={visibleApps} onActivate={(app) => void activateWorkspaceApp(app)} onAddApp={handleAddApp} />
             <WorkspaceOverview
@@ -197,7 +213,7 @@ export function WorkspaceShell() {
         )}
       </section>
 
-      <WhiteboardPlaceholder workspaceName={selectedWorkspace?.name} />
+      <WhiteboardPanel workspaceId={selectedWorkspaceId} workspaceName={selectedWorkspace?.name} />
 
       <CreateWorkspaceDialog
         open={createDialogOpen}

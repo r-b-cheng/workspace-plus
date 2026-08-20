@@ -3,7 +3,8 @@ import { Plus, Search, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { Workspace } from '@/lib/types';
+import { formatDisplayTime } from '@/lib/datetime';
+import type { CanvasSaveStatus, Workspace } from '@/lib/types';
 
 type CurrentWorkspaceHeaderProps = {
   workspace: Workspace;
@@ -11,7 +12,23 @@ type CurrentWorkspaceHeaderProps = {
   onContentQueryChange: (query: string) => void;
   onAddApp: () => void;
   onSettings: () => void;
+  saveStatus?: CanvasSaveStatus;
+  lastSavedAt?: string | null;
+  onRetrySave?: () => void;
 };
+
+function saveStatusLabel(status: CanvasSaveStatus, lastSavedAt?: string | null) {
+  switch (status) {
+    case 'saving':
+      return '保存中…';
+    case 'saved':
+      return lastSavedAt ? `已保存 · ${formatDisplayTime(lastSavedAt)}` : '已保存';
+    case 'save-failed':
+      return '保存失败';
+    default:
+      return '白板就绪';
+  }
+}
 
 export function CurrentWorkspaceHeader({
   workspace,
@@ -19,6 +36,9 @@ export function CurrentWorkspaceHeader({
   onContentQueryChange,
   onAddApp,
   onSettings,
+  saveStatus = 'idle',
+  lastSavedAt,
+  onRetrySave,
 }: CurrentWorkspaceHeaderProps) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-3.5 border-b border-border pb-[18px]">
@@ -26,9 +46,23 @@ export function CurrentWorkspaceHeader({
         <h2 className="m-0 text-lg font-semibold" data-testid="current-workspace-title">
           {workspace.name}
         </h2>
-        <span className="text-sm text-muted-foreground" data-testid="save-status">
-          白板占位 · 保存状态将在后续接入
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground" data-testid="save-status" data-save-state={saveStatus}>
+            {saveStatusLabel(saveStatus, lastSavedAt)}
+          </span>
+          {saveStatus === 'save-failed' ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              data-testid="retry-save-button"
+              onClick={onRetrySave}
+            >
+              重试
+            </Button>
+          ) : null}
+        </div>
       </div>
       <Label
         htmlFor="workspace-search-input"

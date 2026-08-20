@@ -999,6 +999,20 @@ pub fn canvas_latest_updated_at(conn: &Connection, workspace_id: &str) -> Result
     Ok(value)
 }
 
+pub fn asset_get(conn: &Connection, id: &str) -> Result<Option<Asset>, AppError> {
+    let row = conn
+        .query_row(
+            "SELECT id, asset_type, mime_type, file_name, storage_path, byte_size,
+                    sha256, source, created_at
+             FROM assets
+             WHERE id = ?1 AND deleted_at IS NULL",
+            [id],
+            map_asset,
+        )
+        .optional()?;
+    Ok(row)
+}
+
 pub fn asset_find_by_sha256(conn: &Connection, sha256: &str) -> Result<Option<Asset>, AppError> {
     let row = conn
         .query_row(

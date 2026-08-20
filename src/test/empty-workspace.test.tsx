@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkspaceShell } from '@/app/workspace-shell';
 import { appApi } from '@/features/api/app-api';
+import { canvasApi } from '@/features/api/canvas-api';
 import { workspaceApi } from '@/features/api/workspace-api';
 import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
+import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import { useWorkspaceStore } from '@/features/workspaces/store/workspace-store';
-import { mockWorkspace } from '@/test/fixtures';
+import { mockCanvas, mockWorkspace } from '@/test/fixtures';
 
 vi.mock('@/features/api/workspace-api', () => ({
   workspaceApi: {
@@ -16,6 +18,17 @@ vi.mock('@/features/api/workspace-api', () => ({
     renameWorkspace: vi.fn(),
     deleteWorkspace: vi.fn(),
     setActiveWorkspace: vi.fn(),
+  },
+}));
+
+vi.mock('@/features/api/canvas-api', () => ({
+  canvasApi: {
+    getCanvas: vi.fn(),
+    saveCanvas: vi.fn(),
+    upsertCanvasNode: vi.fn(),
+    deleteCanvasNode: vi.fn(),
+    saveCanvasAsset: vi.fn(),
+    readCanvasAsset: vi.fn(),
   },
 }));
 
@@ -37,11 +50,13 @@ describe('空状态引导新建工作区', () => {
   beforeEach(() => {
     useWorkspaceStore.getState().reset();
     useWorkspaceAppStore.getState().reset();
+    useCanvasStore.getState().reset();
     vi.mocked(workspaceApi.listWorkspaces).mockResolvedValue([]);
     vi.mocked(workspaceApi.createWorkspace).mockReset();
     vi.mocked(workspaceApi.setActiveWorkspace).mockReset();
     vi.mocked(appApi.listWorkspaceApps).mockResolvedValue([]);
     vi.mocked(appApi.listInstalledApps).mockResolvedValue([]);
+    vi.mocked(canvasApi.getCanvas).mockResolvedValue(mockCanvas({ workspaceId: 'ws-paper', nodes: [], edges: [] }));
   });
 
   it('无工作区时展示空状态并引导新建', async () => {

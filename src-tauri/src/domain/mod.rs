@@ -13,7 +13,7 @@ pub use app::{
     app_type_to_launch_kind, installed_app_source_to_dto, workspace_app_status_to_dto, InstalledApp,
     RemoveWorkspaceAppResult, WorkspaceApp,
 };
-pub use asset::Asset;
+pub use asset::{Asset, CanvasAssetContent};
 pub use canvas::{Canvas, CanvasEdge, CanvasEdgeInput, CanvasNode, CanvasNodeInput};
 pub use window::{NativeWindow, NativeWindowId};
 pub use workspace::{DeleteWorkspaceResult, Workspace};

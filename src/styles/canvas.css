@@ -1,0 +1,72 @@
+@import "@xyflow/react/dist/style.css";
+
+.workspace-canvas .react-flow {
+  background: #f8fbff;
+}
+
+.workspace-canvas .react-flow__attribution {
+  font-size: 10px;
+  background: transparent;
+}
+
+.canvas-markdown-preview {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #172033;
+}
+
+.canvas-markdown-preview h1,
+.canvas-markdown-preview h2,
+.canvas-markdown-preview h3 {
+  margin: 0 0 0.45rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.canvas-markdown-preview h1 {
+  font-size: 1.2rem;
+}
+
+.canvas-markdown-preview h2 {
+  font-size: 1.05rem;
+}
+
+.canvas-markdown-preview p,
+.canvas-markdown-preview ul,
+.canvas-markdown-preview ol {
+  margin: 0 0 0.5rem;
+}
+
+.canvas-markdown-preview ul,
+.canvas-markdown-preview ol {
+  padding-left: 1.15rem;
+}
+
+.canvas-markdown-preview pre {
+  margin: 0 0 0.5rem;
+  overflow: auto;
+  border-radius: 6px;
+  background: #f3f6fb;
+  padding: 8px;
+}
+
+.canvas-markdown-preview code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.canvas-markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.5rem;
+}
+
+.canvas-markdown-preview th,
+.canvas-markdown-preview td {
+  border: 1px solid #e5e9f2;
+  padding: 3px 6px;
+}
+
+.canvas-markdown-preview a {
+  color: #176bff;
+}

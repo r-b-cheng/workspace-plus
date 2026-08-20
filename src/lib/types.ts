@@ -108,6 +108,71 @@ export type Canvas = {
   updatedAt?: string;
 };
 
+export type CanvasSaveStatus = 'idle' | 'saving' | 'saved' | 'save-failed';
+
+export type CanvasNodeInput = {
+  id?: string;
+  nodeType: CanvasNodeType;
+  title?: string;
+  contentMarkdown?: string;
+  contentText?: string;
+  assetId?: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  color?: string;
+  metadataJson?: string;
+  zIndex?: number;
+};
+
+export type CanvasEdgeInput = {
+  id?: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  label?: string;
+  edgeType?: string;
+  metadataJson?: string;
+};
+
+export type GetCanvasInput = WorkspaceIdInput;
+
+export type SaveCanvasInput = {
+  workspaceId: string;
+  nodes: CanvasNodeInput[];
+  edges: CanvasEdgeInput[];
+};
+
+export type UpsertCanvasNodeInput = {
+  workspaceId: string;
+  node: CanvasNodeInput;
+};
+
+export type DeleteCanvasNodeInput = {
+  workspaceId: string;
+  nodeId: string;
+};
+
+export type SaveCanvasAssetInput = {
+  fileName: string;
+  contentBase64: string;
+  mimeType?: string;
+  source?: string;
+  workspaceId?: string;
+};
+
+export type ReadCanvasAssetInput = {
+  assetId: string;
+};
+
+export type CanvasAssetContent = {
+  assetId: string;
+  mimeType?: string;
+  fileName?: string;
+  contentBase64: string;
+  dataUrl: string;
+};
+
 export type Asset = {
   id: string;
   assetType: string;

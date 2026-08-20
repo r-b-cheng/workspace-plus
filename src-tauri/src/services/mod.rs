@@ -9,8 +9,8 @@ use base64::Engine;
 use rusqlite::Connection;
 
 use crate::domain::{
-    Asset, Canvas, CanvasEdge, CanvasEdgeInput, CanvasNode, CanvasNodeInput, DeleteWorkspaceResult,
-    InstalledApp, RemoveWorkspaceAppResult, Workspace, WorkspaceApp,
+    Asset, Canvas, CanvasAssetContent, CanvasEdge, CanvasEdgeInput, CanvasNode, CanvasNodeInput,
+    DeleteWorkspaceResult, InstalledApp, RemoveWorkspaceAppResult, Workspace, WorkspaceApp,
 };
 use crate::errors::AppError;
 use crate::platform::{
@@ -585,6 +585,25 @@ impl AppService {
         }
         Ok(asset)
     }
+
+    pub fn read_canvas_asset(&self, asset_id: &str) -> Result<CanvasAssetContent, AppError> {
+        let conn = self.lock_db()?;
+        let asset = storage::asset_get(&conn, asset_id)?
+            .ok_or_else(|| AppError::not_found("asset not found"))?;
+        drop(conn);
+
+        let absolute = resolve_asset_file(&self.paths.assets_dir, &asset.storage_path)?;
+        let bytes = fs::read(&absolute).map_err(|_| AppError::not_found("asset file missing"))?;
+        let content_base64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let mime = mime_from_asset(&asset);
+        Ok(CanvasAssetContent {
+            asset_id: asset.id,
+            mime_type: Some(mime.clone()),
+            file_name: asset.file_name,
+            data_url: format!("data:{mime};base64,{content_base64}"),
+            content_base64,
+        })
+    }
 }
 
 fn write_asset_file(path: &PathBuf, bytes: &[u8]) -> Result<(), AppError> {
@@ -592,6 +611,47 @@ fn write_asset_file(path: &PathBuf, bytes: &[u8]) -> Result<(), AppError> {
         fs::create_dir_all(parent)?;
     }
     fs::write(path, bytes).map_err(|_| AppError::asset_write_failed("failed to write asset file"))
+}
+
+fn resolve_asset_file(assets_dir: &Path, storage_path: &str) -> Result<PathBuf, AppError> {
+    let storage_path = storage_path.trim();
+    if storage_path.is_empty() {
+        return Err(AppError::not_found("asset file missing"));
+    }
+    let relative = Path::new(storage_path);
+    let file_name = relative
+        .file_name()
+        .ok_or_else(|| AppError::not_found("asset file missing"))?;
+    if file_name != relative.as_os_str() {
+        return Err(AppError::not_found("asset file missing"));
+    }
+    Ok(assets_dir.join(file_name))
+}
+
+fn mime_from_asset(asset: &Asset) -> String {
+    if let Some(mime) = asset
+        .mime_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return mime.to_string();
+    }
+    match Path::new(&asset.storage_path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("svg") => "image/svg+xml",
+        Some("bmp") => "image/bmp",
+        _ => "application/octet-stream",
+    }
+    .to_string()
 }
 
 fn extension_from(file_name: &str, mime_type: Option<&str>) -> String {

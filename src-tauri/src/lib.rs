@@ -40,6 +40,7 @@ pub fn run() {
             commands::canvas::get_canvas,
             commands::canvas::save_canvas,
             commands::canvas::save_canvas_asset,
+            commands::canvas::read_canvas_asset,
             commands::canvas::upsert_canvas_node,
             commands::canvas::delete_canvas_node,
         ])
