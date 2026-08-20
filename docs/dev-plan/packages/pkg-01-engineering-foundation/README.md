@@ -1,6 +1,6 @@
 # pkg-01 工程基础：Tailwind、shadcn 与目录规范
 
-状态：pending  
+状态：completed  
 依赖：无  
 可并行：pkg-02
 
@@ -33,14 +33,14 @@
 
 ## 子任务
 
-| ID | 子任务 | 完成标准 |
-|---|---|---|
-| s01-01 | 安装 Tailwind 4 及相关依赖 | 页面 class 能出样式 |
-| s01-02 | 初始化 shadcn 并加基础组件 | 壳里能引用 Button/Dialog/Input |
-| s01-03 | 新增 `src/lib/cn.ts` | 组件统一用 `cn()` |
-| s01-04 | 创建 features / api 空目录 | 已完成：各 feature 目录和归属 README 已建好 |
-| s01-05 | 手写 CSS 迁到 Tailwind | 视觉仍接近 `ui-direction-notes` |
-| s01-06 | 保留 testid，构建通过 | `npm run build` 成功 |
+| ID | 子任务 | 状态 | 完成标准 |
+|---|---|---|---|
+| s01-01 | 安装 Tailwind 4 及相关依赖 | completed | 页面 class 能出样式 |
+| s01-02 | 初始化 shadcn 并加基础组件 | completed | 壳里能引用 Button/Dialog/Input |
+| s01-03 | 新增 `src/lib/cn.ts` | completed | 组件统一用 `cn()` |
+| s01-04 | 创建 features / api 空目录 | completed | 各 feature 目录、归属 README 与空 index 占位已建好 |
+| s01-05 | 手写 CSS 迁到 Tailwind | completed | 视觉仍接近 `ui-direction-notes` |
+| s01-06 | 保留 testid，构建通过 | completed | `npm run build` 成功 |
 
 ## 验收
 

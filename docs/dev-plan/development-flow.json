@@ -5,7 +5,7 @@
   "planId": "v1-vertical-slice",
   "planName": "第一版竖切开发流程",
   "createdAt": "2026-08-20",
-  "status": "pending",
+  "status": "in_progress",
   "sourceOfTruth": "docs/dev-plan/development-flow.json",
   "packageDir": "docs/dev-plan/packages/<pkg-id>",
   "relatedSpecs": [
@@ -132,7 +132,7 @@
       "id": "pkg-01-engineering-foundation",
       "seq": 1,
       "title": "工程基础：Tailwind、shadcn 与目录规范",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [],
       "parallelWith": [
         "pkg-02-storage-and-commands"
@@ -207,19 +207,19 @@
         {
           "id": "s01-01",
           "title": "安装 Tailwind CSS 4、@tailwindcss/vite、tailwind-merge、class-variance-authority、clsx",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "依赖写入 package.json，Vite 插件生效，页面 class 能出样式。"
         },
         {
           "id": "s01-02",
           "title": "初始化 shadcn/ui 并添加本包基础组件",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "存在 components.json 与 src/components/ui 下的基础组件，可在壳里引用 Button/Dialog/Input。"
         },
         {
           "id": "s01-03",
           "title": "新增 src/lib/cn.ts，统一 class 合并",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "cn() 可供组件使用，不在各文件重复拼 class。"
         },
         {
@@ -231,13 +231,13 @@
         {
           "id": "s01-05",
           "title": "将 workspace-shell 从手写 CSS 迁到 Tailwind + shadcn",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "三栏、侧栏、顶栏、添加软件弹窗外观仍接近参考图；旧 CSS 删除或只留极少量全局重置。"
         },
         {
           "id": "s01-06",
           "title": "保留主流程 data-testid，确认构建通过",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "workspace-shell、create-workspace、add-app、app-card、whiteboard-panel 等测试 id 仍在；npm run build 成功。"
         }
       ],

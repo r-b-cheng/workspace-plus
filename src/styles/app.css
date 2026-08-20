@@ -1,364 +1,77 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
 :root {
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #172033;
-  background: #f5f7fb;
+  --radius: 0.5rem;
+  --background: #f5f7fb;
+  --foreground: #172033;
+  --card: #ffffff;
+  --card-foreground: #172033;
+  --popover: #ffffff;
+  --popover-foreground: #172033;
+  --primary: #176bff;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f9fc;
+  --secondary-foreground: #172033;
+  --muted: #f7f9fc;
+  --muted-foreground: #6b778d;
+  --accent: #edf4ff;
+  --accent-foreground: #176bff;
+  --destructive: #dc2626;
+  --border: #e5e9f2;
+  --input: #e0e6f0;
+  --ring: #176bff;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-button,
-input {
-  font: inherit;
-}
-
-.workspace-shell {
-  display: grid;
-  grid-template-columns: 292px minmax(520px, 1fr) 390px;
-  min-height: 100vh;
-  background: #f5f7fb;
-}
-
-.workspace-sidebar,
-.workspace-main,
-.whiteboard-panel {
-  background: #ffffff;
-  border-right: 1px solid #e5e9f2;
-}
-
-.workspace-sidebar {
-  padding: 22px 16px;
-}
-
-.brand,
-.sidebar-header,
-.workspace-topbar,
-.whiteboard-panel header,
-.add-app-dialog header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.brand {
-  justify-content: flex-start;
-  margin-bottom: 28px;
-  font-weight: 700;
-}
-
-.brand-mark {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 8px;
-  color: #ffffff;
-  background: #1f78ff;
-}
-
-.sidebar-header h1,
-.workspace-topbar h2,
-.whiteboard-panel h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.primary-button,
-.secondary-button,
-.icon-button,
-.text-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.primary-button {
-  width: 100%;
-  padding: 12px 14px;
-  color: #ffffff;
-  background: #176bff;
-}
-
-.secondary-button {
-  width: auto;
-  padding: 10px 14px;
-  color: #172033;
-  background: #f7f9fc;
-  border: 1px solid #e0e6f0;
-}
-
-.icon-button {
-  width: 36px;
-  height: 36px;
-  color: #475569;
-  background: #f7f9fc;
-  border: 1px solid #e0e6f0;
-}
-
-.text-button {
-  padding: 8px 10px;
-  color: #176bff;
-  background: #edf4ff;
-}
-
-.workspace-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.workspace-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 14px;
-  text-align: left;
-  background: #ffffff;
-  border: 1px solid #e7ebf3;
-  border-radius: 10px;
-  cursor: pointer;
-}
-
-.workspace-item.active {
-  border-color: #176bff;
-  background: #f3f7ff;
-}
-
-.workspace-icon {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border-radius: 10px;
-  color: #ffffff;
-}
-
-.workspace-copy {
-  display: grid;
-  gap: 5px;
-}
-
-.workspace-copy small,
-.save-status,
-.app-card span,
-.add-app-dialog p,
-.installed-app-result small {
-  color: #6b778d;
-}
-
-.workspace-main {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 24px;
-}
-
-.workspace-topbar {
-  border-bottom: 1px solid #e5e9f2;
-  padding-bottom: 18px;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 260px;
-  padding: 10px 14px;
-  border: 1px solid #e0e6f0;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.search-box input,
-.dialog-search {
-  width: 100%;
-  border: 0;
-  outline: 0;
-}
-
-.app-tabs,
-.app-card-grid,
-.sticky-board {
-  display: flex;
-  gap: 12px;
-}
-
-.app-tabs button {
-  padding: 10px 16px;
-  border: 1px solid #e0e6f0;
-  border-radius: 8px;
-  background: #f9fbfe;
-  cursor: pointer;
-}
-
-.workspace-overview {
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 24px;
-  min-height: 260px;
-  padding: 28px;
-  border: 1px solid #e5e9f2;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #f8fbff, #ffffff);
-}
-
-.eyebrow {
-  margin: 0 0 16px;
-  color: #176bff;
-  font-weight: 700;
-}
-
-.workspace-overview h3 {
-  margin: 0 0 12px;
-  font-size: 28px;
-}
-
-.preview-frame {
-  display: grid;
-  place-items: center;
-  border: 1px solid #dfe7f5;
-  border-radius: 8px;
-  color: #6b778d;
-  background: #ffffff;
-}
-
-.app-card-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.app-card {
-  display: flex;
-  min-height: 112px;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 16px;
-  border: 1px solid #e5e9f2;
-  border-radius: 10px;
-  background: #ffffff;
-}
-
-.whiteboard-panel {
-  padding: 24px;
-  border-right: 0;
-}
-
-.sticky-board {
-  margin-top: 24px;
-}
-
-.note-card {
-  display: grid;
-  gap: 10px;
-  min-height: 150px;
-  flex: 1;
-  padding: 18px;
-  border-radius: 8px;
-  box-shadow: 0 12px 28px rgb(23 32 51 / 10%);
-}
-
-.note-card.yellow {
-  background: #ffe9a8;
-}
-
-.note-card.blue {
-  background: #c9ecff;
-}
-
-.timeline {
-  margin-top: 28px;
-}
-
-.timeline-item {
-  display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 12px;
-  padding: 10px 0;
-  border-left: 2px solid #d8e5ff;
-}
-
-.timeline-item time {
-  color: #526078;
-}
-
-.dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: start center;
-  padding-top: 80px;
-  background: rgb(23 32 51 / 18%);
-}
-
-.add-app-dialog {
-  width: 360px;
-  padding: 20px;
-  border: 1px solid #e0e6f0;
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 24px 70px rgb(23 32 51 / 18%);
-}
-
-.dialog-search {
-  margin: 14px 0;
-  padding: 12px 14px;
-  border: 1px solid #e0e6f0;
-  border-radius: 8px;
-}
-
-.installed-app-list {
-  display: grid;
-  gap: 8px;
-}
-
-.installed-app-result {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px;
-  border: 0;
-  border-radius: 8px;
-  background: #f8fbff;
-  cursor: pointer;
-}
-
-@media (max-width: 1180px) {
-  .workspace-shell {
-    grid-template-columns: 260px minmax(0, 1fr);
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
   }
 
-  .whiteboard-panel {
-    display: none;
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    margin: 0;
+    font-family:
+      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      sans-serif;
+  }
+
+  button,
+  input {
+    font: inherit;
   }
 }
-
-@media (max-width: 820px) {
-  .workspace-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .workspace-sidebar {
-    display: none;
-  }
-
-  .workspace-topbar,
-  .workspace-overview {
-    grid-template-columns: 1fr;
-  }
-
-  .app-card-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
