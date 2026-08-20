@@ -4,6 +4,8 @@
 
 本文档用于管理 Workspace Hub 的开发推进。当前项目第一版目标不是做完整虚拟桌面，也不是把外部软件嵌入应用内部，而是稳定完成工作区管理、软件扫描与启动、外部窗口切换、白板记录和本地持久化。
 
+2026-08-20 起，第一版竖切的执行计划以 `docs/dev-plan/development-flow.json` 为准。每个开发包独占 `docs/dev-plan/packages/<pkg-id>/`，内含 `pkg.json` 和 `README.md`。目录归属见 `docs/dev-plan/folder-structure.md`。规格文档在 `docs/product/` 与 `docs/specs/`；改哪些文件、交什么、子任务做到哪，以开发包为准。
+
 ## 1. 开发原则
 
 第一版必须先打通主链路：创建工作区，搜索并添加软件，启动软件，将软件加入当前工作区，点击软件卡片切换到真实外部窗口，在右侧白板记录 Markdown 或图片卡片，并在重启后恢复数据。
@@ -16,13 +18,13 @@
 
 当前已启动 4 个第一轮子智能体，用于补齐正式开发前的关键规格文档。
 
-平台适配智能体 Ampere，负责 `docs/platform-adapter-spec.md`。它需要定义 Windows 第一版的扫描、启动、窗口枚举、窗口聚焦、图标读取和未来 macOS 映射方式。
+平台适配智能体 Ampere，负责 `docs/specs/platform-adapter-spec.md`。它需要定义 Windows 第一版的扫描、启动、窗口枚举、窗口聚焦、图标读取和未来 macOS 映射方式。
 
-数据与本地存储智能体 Noether，负责 `docs/data-model-and-storage-spec.md`。它需要定义 SQLite schema、迁移策略、工作区软件和系统软件的关系、白板节点和资源存储方式。
+数据与本地存储智能体 Noether，负责 `docs/specs/data-model-and-storage-spec.md`。它需要定义 SQLite schema、迁移策略、工作区软件和系统软件的关系、白板节点和资源存储方式。
 
-前端工作区智能体 Carson，负责 `docs/frontend-workspace-ui-spec.md`。它需要定义 React 组件结构、状态管理、Tauri command 调用边界、三栏布局和前端主流程。
+前端工作区智能体 Carson，负责 `docs/specs/frontend-workspace-ui-spec.md`。它需要定义 React 组件结构、状态管理、Tauri command 调用边界、三栏布局和前端主流程。
 
-测试与验收智能体 Planck，负责 `docs/test-and-acceptance-plan.md`。它需要定义 Vitest、Playwright、Rust 测试和 Windows 人工验收边界。
+测试与验收智能体 Planck，负责 `docs/specs/test-and-acceptance-plan.md`。它需要定义 Vitest、Playwright、Rust 测试和 Windows 人工验收边界。
 
 ## 3. 阶段路线
 
@@ -40,13 +42,17 @@
 
 第七阶段是集成和打包。联调前端、后端、平台适配和本地数据库；补齐失败状态；检查许可证；完成 Windows 安装包或可运行构建。
 
+第二版可以在第一版主链路稳定后加入 Agent use case：根据当前工作区的画布内容，实时生成费曼学习式的提问、复述检查、概念拆解和知识缺口提示。这个 Agent 不应该在第二版一开始就读取外部软件内部内容，而是优先基于用户主动放入画布的 Markdown、截图说明、图片卡片标题、连线关系和工作区上下文运行。核心目标不是替用户自动总结一切，而是帮助用户把画布上的材料转化为“我是否真正理解”的交互式学习过程。
+
+第二版 Agent 的开发应放在独立阶段处理：先定义画布上下文抽取格式、隐私开关、LLM provider 配置、提示词模板、响应落盘结构和可撤销的建议卡片，再实现实时触发策略。实时不等于每次输入都请求模型，默认应采用用户手动触发或防抖触发，并允许用户选择只分析当前选中节点、当前视口或整个画布。
+
 ## 4. MVP 任务清单
 
 `P0` 任务必须进入第一版：项目脚手架、工作区 CRUD、软件扫描、软件搜索、启动软件、加入当前工作区、窗口切换、快速切换面板、快捷键配置、白板 Markdown 卡片、图片卡片、自动保存、本地 SQLite 持久化、Windows 基础验收。
 
 `P1` 任务可以在第一版后半段进入：窗口截图预览、工作区内软件别名、操作记录时间线、手动添加 URL/文件夹/命令、更多快捷键动作、工作区设置、导出白板数据。
 
-`P2` 任务暂不进入 MVP：外部软件内嵌、多窗口精细管理、跨设备同步、多人协作、AI 自动总结、自动监听用户在外部软件内的具体操作、插件市场、完整 macOS 实现。
+`P2` 任务暂不进入 MVP：外部软件内嵌、多窗口精细管理、跨设备同步、多人协作、AI 自动总结、基于画布内容的实时费曼学习 Agent、自动监听用户在外部软件内的具体操作、插件市场、完整 macOS 实现。
 
 ## 5. 验收门槛
 

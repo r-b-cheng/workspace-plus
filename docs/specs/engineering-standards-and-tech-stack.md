@@ -46,15 +46,21 @@ Rust 核心库建议使用：`serde`、`serde_json`、`thiserror`、`anyhow`、`
 
 ## 4. 代码目录规范
 
-推荐目录结构如下：
+推荐目录结构如下。归属细则以 `docs/dev-plan/folder-structure.md` 为准，不要把不同职责的模块平铺进同一个文件夹。
 
 ```text
 workspace-hub/
   docs/
+    product/
+    specs/
+    process/
+    dev-plan/
+      packages/<pkg-id>/
   src/
     app/
-    components/
+    components/ui/
     features/
+      api/
       workspaces/
       apps/
       windows/
@@ -67,19 +73,21 @@ workspace-hub/
     src/
       commands/
       domain/
+      services/
+      storage/
       platform/
-        mod.rs
+        mock.rs
         windows/
         macos/
-      storage/
       errors.rs
       lib.rs
     migrations/
+    tests/
   tests/
     e2e/
 ```
 
-`src/features` 按产品能力拆分，不按页面随意堆组件。`src-tauri/src/domain` 放工作区、软件、窗口、白板这些业务模型；`src-tauri/src/platform` 放系统适配接口和各平台实现；`src-tauri/src/commands` 只做 Tauri command 参数校验、调用业务服务、返回序列化结果，不把复杂逻辑写在 command 函数里。
+`src/features` 按产品能力拆分，不按页面随意堆组件。`src-tauri/src/domain` 放工作区、软件、窗口、白板这些业务模型；`src-tauri/src/services` 编排业务；`src-tauri/src/storage` 只碰 SQLite；`src-tauri/src/platform` 只碰系统能力；`src-tauri/src/commands` 只做参数校验、调用 service、返回序列化结果。
 
 ## 5. 注释与文档规范
 

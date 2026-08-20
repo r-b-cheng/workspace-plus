@@ -1,4 +1,14 @@
+//! Operating-system capabilities. Product rules do not live here.
+
 use crate::domain::{InstalledApp, NativeWindow};
+
+pub mod mock;
+
+#[cfg(windows)]
+pub mod windows;
+
+#[cfg(target_os = "macos")]
+pub mod macos;
 
 pub trait PlatformAdapter: Send + Sync {
     fn scan_installed_apps(&self) -> Vec<InstalledApp>;
@@ -18,4 +28,3 @@ pub enum PlatformError {
     #[error("platform operation failed: {0}")]
     Internal(String),
 }
-

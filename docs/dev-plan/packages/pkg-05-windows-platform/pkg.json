@@ -1,0 +1,113 @@
+{
+  "id": "pkg-05-windows-platform",
+  "seq": 5,
+  "title": "Windows 真实扫描、启动与窗口置前",
+  "status": "pending",
+  "dependsOn": ["pkg-02-storage-and-commands"],
+  "parallelWith": ["pkg-03-frontend-workspace", "pkg-04-whiteboard-canvas"],
+  "ownerHint": "平台适配智能体",
+  "goal": "用 Windows 实现替换 mock：开始菜单扫描、启动 exe/快捷方式、枚举窗口、恢复并置前、解析手动 exe/lnk。业务 command 名称不变。",
+  "changeScope": {
+    "summary": "只改 platform 层和适配器装配。不改前端交互语义，不把 HWND 传到前端，不做安装包和全局快捷键。",
+    "allowedPaths": [
+      "src-tauri/src/platform/**",
+      "src-tauri/src/lib.rs",
+      "src-tauri/Cargo.toml",
+      "src-tauri/Cargo.lock",
+      "src-tauri/tauri.conf.json",
+      "src-tauri/tests/**"
+    ],
+    "forbiddenPaths": [
+      "src/app/**",
+      "src/features/**",
+      "src-tauri/migrations/**"
+    ],
+    "allowedChanges": [
+      "实现 Windows 开始菜单 .lnk 扫描，可选合并注册表卸载信息",
+      "启动 Executable 与 Shortcut",
+      "枚举顶层窗口并做 opaque NativeWindowId",
+      "恢复最小化窗口并尝试置前，区分 FocusDenied 与 WindowClosed",
+      "resolve 手动 exe / .lnk，拒绝 folder/url/command",
+      "读取应用图标到 assets 缓存（失败则默认图标）",
+      "Windows 集成测试用显式开关，不进入默认 cargo test"
+    ],
+    "forbiddenChanges": [
+      "实现文件夹 / URL / 命令启动",
+      "实现窗口实时预览或后台截图",
+      "把 HWND 或注册表路径暴露给前端 DTO",
+      "在前端或 workspace service 里直接调 Win32",
+      "默认以管理员运行",
+      "注册全局快捷键"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d05-scan",
+      "name": "开始菜单扫描",
+      "description": "refresh_installed_apps 能写入真实可启动项；按 fingerprint 合并，扫描不到只标不可用。"
+    },
+    {
+      "id": "d05-launch",
+      "name": "真实启动",
+      "description": "launch_workspace_app 能打开 exe 或快捷方式，并尽量在超时内绑定主窗口。"
+    },
+    {
+      "id": "d05-focus",
+      "name": "真实聚焦",
+      "description": "focus_workspace_app 能恢复最小化并尝试置前；关闭则 WindowClosed；系统拒绝则 FocusDenied。"
+    },
+    {
+      "id": "d05-manual",
+      "name": "手动 exe/lnk",
+      "description": "add_manual_app 经平台解析后再入库；坏路径返回 InvalidTarget/NotFound。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s05-01",
+      "title": "实现 Windows adapter 骨架并在装配时替换 mock",
+      "status": "pending",
+      "doneWhen": "cfg(windows) 默认用 Windows adapter；测试仍可注入 mock。"
+    },
+    {
+      "id": "s05-02",
+      "title": "实现开始菜单快捷方式扫描与去重",
+      "status": "pending",
+      "doneWhen": "能扫到记事本、浏览器等常见项；同启动目标不重复；不全盘深扫。"
+    },
+    {
+      "id": "s05-03",
+      "title": "实现启动与短时窗口匹配",
+      "status": "pending",
+      "doneWhen": "启动成功可无窗口（托盘/复用进程）但不误报失败；超时有明确错误。"
+    },
+    {
+      "id": "s05-04",
+      "title": "实现枚举、校验、恢复、置前",
+      "status": "pending",
+      "doneWhen": "句柄失效返回 WindowClosed；最小化可恢复；置前失败不假装成功。"
+    },
+    {
+      "id": "s05-05",
+      "title": "实现手动 exe/lnk 解析与图标读取",
+      "status": "pending",
+      "doneWhen": "有效路径给出 displayName 和建议图标；无效路径结构化失败；图标失败不阻断添加。"
+    },
+    {
+      "id": "s05-06",
+      "title": "隔离 Windows 原生测试",
+      "status": "pending",
+      "doneWhen": "默认 cargo test 不碰真实桌面；WINDOWS_NATIVE_TESTS=1 才跑原生用例。"
+    }
+  ],
+  "acceptance": [
+    "前端仍只调用业务 command",
+    "NativeWindowId 对前端是不透明字符串",
+    "手动目标仅 exe 与 shortcut",
+    "默认测试集不启动真实 GUI 软件"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-05-windows-platform/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-05-windows-platform/README.md"
+  }
+}

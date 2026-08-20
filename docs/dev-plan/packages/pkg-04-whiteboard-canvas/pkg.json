@@ -1,0 +1,118 @@
+{
+  "id": "pkg-04-whiteboard-canvas",
+  "seq": 4,
+  "title": "白板：Markdown、图片、拖拽缩放、自动保存",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-01-engineering-foundation",
+    "pkg-02-storage-and-commands",
+    "pkg-03-frontend-workspace"
+  ],
+  "parallelWith": [],
+  "ownerHint": "白板 Canvas 智能体",
+  "goal": "右侧白板成为当前工作区的记录空间：Markdown 卡片、粘贴/拖入图片、拖拽缩放、自动保存，重启后按工作区恢复。",
+  "changeScope": {
+    "summary": "只做 canvas feature、画布与资源 API 的前端使用，以及必要的节点转换函数。不做待办、时间线、连线复杂编辑、手绘。",
+    "allowedPaths": [
+      "src/features/canvas/**",
+      "src/features/api/canvas-api.ts",
+      "src/app/workspace-shell.tsx",
+      "src/lib/types.ts",
+      "src/styles/**",
+      "src/test/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/storage/**",
+      "src-tauri/src/domain/**"
+    ],
+    "forbiddenPaths": [
+      "src/features/apps/**",
+      "src-tauri/src/platform/windows/**"
+    ],
+    "allowedChanges": [
+      "用 @xyflow/react 做无限画布",
+      "Markdown 卡片：CodeMirror 编辑 + react-markdown 预览",
+      "图片卡片：剪贴板粘贴、拖入本地图片，经 save_canvas_asset 落盘",
+      "拖拽、缩放、选择、删除节点",
+      "防抖自动保存，顶栏显示保存中/已保存/失败可重试",
+      "持久化只存产品字段，剥离 React Flow 渲染态",
+      "若 command 不够用，只允许补 canvas/asset 相关后端，不改平台层"
+    ],
+    "forbiddenChanges": [
+      "待办卡片、操作记录时间线、撤销重做栈（可后做）",
+      "自动监听外部软件操作",
+      "把 React Flow 完整节点对象直接写入 SQLite",
+      "跨工作区共享一张画布",
+      "实现全局快捷键或快速切换"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d04-canvas",
+      "name": "工作区画布",
+      "description": "右侧面板展开 React Flow 画布，属于当前 selectedWorkspaceId。"
+    },
+    {
+      "id": "d04-markdown",
+      "name": "Markdown 卡片",
+      "description": "可新建、编辑、预览、删除、拖动；内容写入 contentMarkdown。"
+    },
+    {
+      "id": "d04-image",
+      "name": "图片卡片",
+      "description": "粘贴或拖入图片后先存 assets，节点只引用 assetId。"
+    },
+    {
+      "id": "d04-autosave",
+      "name": "自动保存与恢复",
+      "description": "移动/编辑后防抖保存；刷新或重启后位置和内容仍在；切换工作区不串数据。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s04-01",
+      "title": "实现 canvas store 与持久化转换函数",
+      "status": "pending",
+      "doneWhen": "toPersistedCanvasNode / fromPersistedCanvasNode 不包含 selected、dragging 等渲染字段。"
+    },
+    {
+      "id": "s04-02",
+      "title": "接入 React Flow 画布到右侧面板",
+      "status": "pending",
+      "doneWhen": "当前工作区可平移缩放；空画布可新建卡片。"
+    },
+    {
+      "id": "s04-03",
+      "title": "实现 Markdown 卡片编辑与预览",
+      "status": "pending",
+      "doneWhen": "双击或点击进入编辑，预览渲染 GFM；内容进入自动保存。"
+    },
+    {
+      "id": "s04-04",
+      "title": "实现图片粘贴、拖入与资源上传",
+      "status": "pending",
+      "doneWhen": "图片进 app data assets；数据库只存引用；缺失资源有可见降级。"
+    },
+    {
+      "id": "s04-05",
+      "title": "实现防抖自动保存和保存状态",
+      "status": "pending",
+      "doneWhen": "顶栏 save-status 在 saving/saved/save-failed 间切换；失败可重试。"
+    },
+    {
+      "id": "s04-06",
+      "title": "切换工作区与重启恢复",
+      "status": "pending",
+      "doneWhen": "切工作区立即换画布；重新打开应用后节点仍在原工作区。"
+    }
+  ],
+  "acceptance": [
+    "工作区 A 的卡片不会出现在工作区 B",
+    "重启后 Markdown 正文和图片卡片还在",
+    "图片不进 SQLite BLOB",
+    "中间区域仍然不是外部软件容器"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-04-whiteboard-canvas/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-04-whiteboard-canvas/README.md"
+  }
+}

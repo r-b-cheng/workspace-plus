@@ -1,0 +1,114 @@
+{
+  "id": "pkg-06-integration-acceptance",
+  "seq": 6,
+  "title": "竖切联调、失败态与验收",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-03-frontend-workspace",
+    "pkg-04-whiteboard-canvas",
+    "pkg-05-windows-platform"
+  ],
+  "parallelWith": [],
+  "ownerHint": "测试与验收智能体 / 主控",
+  "goal": "把数据、界面、白板、Windows 适配收成一条可验收主链路，补齐失败态和自动化测试，并留下人工验收清单。",
+  "changeScope": {
+    "summary": "允许为联调改各层胶水、错误文案、测试和验收文档。不借机做 P1/P2，不打安装包，不注册全局快捷键。",
+    "allowedPaths": [
+      "src/**",
+      "src-tauri/src/**",
+      "src-tauri/tests/**",
+      "tests/e2e/**",
+      "docs/dev-plan/**",
+      "docs/specs/test-and-acceptance-plan.md",
+      "playwright.config.ts",
+      "package.json"
+    ],
+    "forbiddenPaths": [],
+    "allowedChanges": [
+      "打通 mock 与真实 adapter 下的同一条 UI 主链路",
+      "窗口已关闭提示与重新打开",
+      "删除工作区 / 移出软件的文案和数据结果核对",
+      "两个工作区软件与白板隔离",
+      "Vitest + Playwright + cargo test",
+      "Windows 人工验收清单和记录模板",
+      "修复竖切内的缺口和明显缺陷"
+    ],
+    "forbiddenChanges": [
+      "快速切换面板、可配置全局快捷键",
+      "安装包 / 签名 / 自动更新",
+      "待办卡片、操作时间线、窗口截图预览",
+      "文件夹 / URL / 命令",
+      "macOS 实现",
+      "费曼学习 Agent"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d06-e2e",
+      "name": "Playwright 主链路",
+      "description": "空状态创建、添加软件、重复添加、白板 Markdown/图片、工作区隔离、关闭提示、保存失败。可用 mock command。"
+    },
+    {
+      "id": "d06-rust",
+      "name": "Rust 回归",
+      "description": "存储、去重、删除语义、画布恢复默认测试全绿。"
+    },
+    {
+      "id": "d06-manual",
+      "name": "Windows 人工验收清单",
+      "description": "记事本或 Edge：启动、最小化恢复、关闭后重开、手动坏路径、删工作区后软件仍在。"
+    },
+    {
+      "id": "d06-report",
+      "name": "已自动 / 仍需人工对照表",
+      "description": "写在本包 markdown 或验收记录里，避免用前端测试冒充窗口置前已通过。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s06-01",
+      "title": "联调启动、聚焦、关闭、重开",
+      "status": "pending",
+      "doneWhen": "真实环境下点卡片能切窗；关掉软件后再点有提示和重开；不会无反馈。"
+    },
+    {
+      "id": "s06-02",
+      "title": "核对删除与移出语义",
+      "status": "pending",
+      "doneWhen": "删工作区或移出软件后，真实进程仍在，系统软件未被卸载，库中 installed_apps 仍在。"
+    },
+    {
+      "id": "s06-03",
+      "title": "核对双工作区隔离与重启恢复",
+      "status": "pending",
+      "doneWhen": "A/B 软件和白板不串；重启进入最近工作区，画布和软件还在。"
+    },
+    {
+      "id": "s06-04",
+      "title": "补齐 Playwright 与 Vitest",
+      "status": "pending",
+      "doneWhen": "npm test 与 npm run test:e2e 覆盖文档中的前端主链路；mock 用例标明不是 Windows 证据。"
+    },
+    {
+      "id": "s06-05",
+      "title": "补齐 Rust 默认测试与人工清单",
+      "status": "pending",
+      "doneWhen": "cargo test 绿；存在可勾选的 Windows 人工验收清单。"
+    },
+    {
+      "id": "s06-06",
+      "title": "标记本竖切完成，列出下一轮不做项",
+      "status": "pending",
+      "doneWhen": "总控 JSON 中本包与依赖包 status 可改为 completed；下一轮仍是快捷键/安装包/时间线等。"
+    }
+  ],
+  "acceptance": [
+    "竖切完成标准全部可演示",
+    "测试报告区分自动验证和人工验证",
+    "没有把 P1/P2 做进来"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-06-integration-acceptance/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-06-integration-acceptance/README.md"
+  }
+}

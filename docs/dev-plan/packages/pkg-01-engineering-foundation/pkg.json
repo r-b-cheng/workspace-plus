@@ -1,0 +1,121 @@
+{
+  "id": "pkg-01-engineering-foundation",
+  "seq": 1,
+  "title": "工程基础：Tailwind、shadcn 与目录规范",
+  "status": "pending",
+  "dependsOn": [],
+  "parallelWith": ["pkg-02-storage-and-commands"],
+  "ownerHint": "前端工作区智能体 / 主控",
+  "goal": "按工程规范把样式体系和目录骨架落地，现有三栏壳能继续跑，但不接通业务。",
+  "changeScope": {
+    "summary": "只改前端工程配置、样式、shadcn 组件和空目录。不写工作区 CRUD、不 invoke Tauri、不改 Rust 业务。",
+    "allowedPaths": [
+      "package.json",
+      "package-lock.json",
+      "vite.config.ts",
+      "tsconfig.json",
+      "tsconfig.node.json",
+      "components.json",
+      "index.html",
+      "src/main.tsx",
+      "src/app/workspace-shell.tsx",
+      "src/styles/**",
+      "src/lib/cn.ts",
+      "src/lib/types.ts",
+      "src/components/ui/**",
+      "src/features/**",
+      "src/test/**"
+    ],
+    "forbiddenPaths": [
+      "src-tauri/src/**",
+      "src-tauri/migrations/**",
+      "docs/product/workspace-manager-prd.md",
+      "docs/specs/data-model-and-storage-spec.md",
+      "docs/specs/platform-adapter-spec.md"
+    ],
+    "allowedChanges": [
+      "安装并配置 Tailwind CSS 4 与 @tailwindcss/vite",
+      "初始化 shadcn/ui，引入本包需要的基础组件",
+      "新增 src/lib/cn.ts",
+      "按工程规范创建 features 空目录和占位导出",
+      "把现有手写 CSS 三栏壳迁到 Tailwind，视觉方向仍参考 ui-direction-notes",
+      "给主流程关键节点保留或补齐 data-testid"
+    ],
+    "forbiddenChanges": [
+      "调用 invoke 或实现 workspace/app/canvas API",
+      "接入 Zustand 业务 store",
+      "实现添加软件、白板、窗口切换逻辑",
+      "新增 Rust 模块或 SQLite",
+      "引入全局快捷键或快速切换面板"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d01-tailwind",
+      "name": "Tailwind 4 可用",
+      "description": "Vite 能编译 Tailwind，三栏布局用 utility class 实现，不再依赖旧的大块 app.css 作为唯一样式源。"
+    },
+    {
+      "id": "d01-shadcn",
+      "name": "shadcn 基础组件",
+      "description": "至少具备 button、dialog、input、label、scroll-area、separator，以及 cn 工具。"
+    },
+    {
+      "id": "d01-dirs",
+      "name": "前端目录骨架",
+      "description": "存在 workspaces、apps、windows、canvas、api 目录，符合 kebab-case 文件命名约定。"
+    },
+    {
+      "id": "d01-shell",
+      "name": "可运行三栏壳",
+      "description": "npm run build 通过；开发态仍能看到工作区列表、中间主区、右侧白板占位。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s01-01",
+      "title": "安装 Tailwind CSS 4、@tailwindcss/vite、tailwind-merge、class-variance-authority、clsx",
+      "status": "pending",
+      "doneWhen": "依赖写入 package.json，Vite 插件生效，页面 class 能出样式。"
+    },
+    {
+      "id": "s01-02",
+      "title": "初始化 shadcn/ui 并添加本包基础组件",
+      "status": "pending",
+      "doneWhen": "存在 components.json 与 src/components/ui 下的基础组件，可在壳里引用 Button/Dialog/Input。"
+    },
+    {
+      "id": "s01-03",
+      "title": "新增 src/lib/cn.ts，统一 class 合并",
+      "status": "pending",
+      "doneWhen": "cn() 可供组件使用，不在各文件重复拼 class。"
+    },
+    {
+      "id": "s01-04",
+      "title": "按规范创建 features 与 api 空目录",
+      "status": "completed",
+      "doneWhen": "workspaces、apps、windows、canvas、api 目录存在；可放 README 或 index 占位，无业务实现。"
+    },
+    {
+      "id": "s01-05",
+      "title": "将 workspace-shell 从手写 CSS 迁到 Tailwind + shadcn",
+      "status": "pending",
+      "doneWhen": "三栏、侧栏、顶栏、添加软件弹窗外观仍接近参考图；旧 CSS 删除或只留极少量全局重置。"
+    },
+    {
+      "id": "s01-06",
+      "title": "保留主流程 data-testid，确认构建通过",
+      "status": "pending",
+      "doneWhen": "workspace-shell、create-workspace、add-app、app-card、whiteboard-panel 等测试 id 仍在；npm run build 成功。"
+    }
+  ],
+  "acceptance": [
+    "前端开发服务器能打开三栏界面",
+    "没有引入业务 API 或 Rust 改动",
+    "目录和文件命名符合工程规范"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-01-engineering-foundation/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-01-engineering-foundation/README.md"
+  }
+}

@@ -16,7 +16,7 @@
 
 它需要维护几个关键决策：前端只调用业务语义命令，不直接知道 Windows API；Rust 后端区分 domain、storage、platform、commands；平台能力通过 trait 或等价接口抽象；工作区、软件、窗口、白板节点的数据结构必须稳定，不能因为某个页面实现方便就随意改字段。
 
-这个智能体的主要产出是开发路线图、模块接口、跨端数据类型、任务优先级和代码审查意见。每次进入新阶段前，它都要确认当前实现是否仍然符合 `docs/workspace-manager-prd.md`、`docs/ui-direction-notes.md` 和 `docs/engineering-standards-and-tech-stack.md`。
+这个智能体的主要产出是开发路线图、模块接口、跨端数据类型、任务优先级和代码审查意见。每次进入新阶段前，它都要确认当前实现是否仍然符合 `docs/product/workspace-manager-prd.md`、`docs/product/ui-direction-notes.md` 和 `docs/specs/engineering-standards-and-tech-stack.md`。
 
 ## 3. 产品与交互智能体
 

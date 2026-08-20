@@ -1,0 +1,886 @@
+{
+  "schemaVersion": 1,
+  "project": "workspace-hub",
+  "projectVersion": "0.1.0",
+  "planId": "v1-vertical-slice",
+  "planName": "第一版竖切开发流程",
+  "createdAt": "2026-08-20",
+  "status": "pending",
+  "sourceOfTruth": "docs/dev-plan/development-flow.json",
+  "packageDir": "docs/dev-plan/packages/<pkg-id>",
+  "relatedSpecs": [
+    "docs/product/workspace-manager-prd.md",
+    "docs/process/project-development-plan.md",
+    "docs/specs/engineering-standards-and-tech-stack.md",
+    "docs/specs/data-model-and-storage-spec.md",
+    "docs/specs/platform-adapter-spec.md",
+    "docs/specs/frontend-workspace-ui-spec.md",
+    "docs/specs/test-and-acceptance-plan.md",
+    "docs/product/ui-direction-notes.md",
+    "docs/dev-plan/folder-structure.md"
+  ],
+  "lockedDecisions": {
+    "doneDefinition": "vertical_slice",
+    "doneDefinitionNote": "建工作区 → 搜/加软件 → 启动 → 切到真窗口 → 白板卡片 → 重启还在。窗口关闭可提示并重开。删除工作区或移除软件只删关联。",
+    "windowsTiming": "mock_then_real",
+    "canvasDepth": "markdown_and_image",
+    "styleSystem": "tailwind_shadcn_now",
+    "firstLaunch": "empty",
+    "closedAndDelete": "both",
+    "manualAdd": "scan_plus_exe_shortcut"
+  },
+  "inScope": [
+    "空状态引导新建工作区",
+    "工作区创建、切换、重命名、删除",
+    "扫描结果搜索并添加软件",
+    "手动添加 exe / 快捷方式",
+    "启动软件并加入当前工作区",
+    "点击卡片聚焦真实外部窗口",
+    "窗口已关闭提示与重新打开",
+    "从工作区移出软件（不关闭、不卸载）",
+    "白板 Markdown 卡片、图片粘贴/拖入、拖拽缩放、自动保存恢复",
+    "本地 SQLite 持久化，图片进 assets 目录",
+    "先 mock 平台，再换成 Windows 真实现"
+  ],
+  "outOfScope": [
+    "快速切换面板",
+    "可配置全局快捷键",
+    "Windows 安装包",
+    "待办卡片",
+    "操作记录时间线",
+    "手动添加文件夹 / URL / 命令",
+    "窗口截图预览",
+    "外部软件内嵌",
+    "完整 macOS 实现",
+    "费曼学习 Agent"
+  ],
+  "executionRules": {
+    "singleImplementerOrder": [
+      "pkg-01-engineering-foundation",
+      "pkg-02-storage-and-commands",
+      "pkg-03-frontend-workspace",
+      "pkg-04-whiteboard-canvas",
+      "pkg-05-windows-platform",
+      "pkg-06-integration-acceptance"
+    ],
+    "waves": [
+      {
+        "id": "wave-1",
+        "packages": [
+          "pkg-01-engineering-foundation",
+          "pkg-02-storage-and-commands"
+        ]
+      },
+      {
+        "id": "wave-2",
+        "packages": [
+          "pkg-03-frontend-workspace",
+          "pkg-05-windows-platform"
+        ]
+      },
+      {
+        "id": "wave-3",
+        "packages": [
+          "pkg-04-whiteboard-canvas"
+        ]
+      },
+      {
+        "id": "wave-4",
+        "packages": [
+          "pkg-06-integration-acceptance"
+        ]
+      }
+    ],
+    "onePackageAtATimeForSingleAgent": true,
+    "doNotExpandScope": true,
+    "frontendNoPlatformDetails": true,
+    "commandsMustStaySemantic": true,
+    "installedAppsAndWorkspaceAppsAreDifferent": true,
+    "syncRule": "改开发包时先改 packages/<pkg-id>/pkg.json，再改该包 README.md，最后同步 development-flow.json 的 packages 数组。"
+  },
+  "commands": [
+    "list_workspaces",
+    "create_workspace",
+    "rename_workspace",
+    "delete_workspace",
+    "set_active_workspace",
+    "list_workspace_apps",
+    "list_installed_apps",
+    "search_installed_apps",
+    "refresh_installed_apps",
+    "add_manual_app",
+    "launch_workspace_app",
+    "focus_workspace_app",
+    "remove_workspace_app",
+    "get_canvas",
+    "save_canvas",
+    "upsert_canvas_node",
+    "delete_canvas_node",
+    "save_canvas_asset"
+  ],
+  "completionCriteria": [
+    "第一次打开是空的，能新建工作区",
+    "能从扫描结果或手动 exe/快捷方式添加软件",
+    "启动后当前工作区出现卡片；再点同一软件不重复绑定",
+    "点卡片能切到真实窗口；窗口关掉后有提示并能重开",
+    "白板 Markdown / 图片重启后还在",
+    "两个工作区的软件和白板互不污染",
+    "删除工作区或移出软件，真实软件还在"
+  ],
+  "packages": [
+    {
+      "id": "pkg-01-engineering-foundation",
+      "seq": 1,
+      "title": "工程基础：Tailwind、shadcn 与目录规范",
+      "status": "pending",
+      "dependsOn": [],
+      "parallelWith": [
+        "pkg-02-storage-and-commands"
+      ],
+      "ownerHint": "前端工作区智能体 / 主控",
+      "goal": "按工程规范把样式体系和目录骨架落地，现有三栏壳能继续跑，但不接通业务。",
+      "changeScope": {
+        "summary": "只改前端工程配置、样式、shadcn 组件和空目录。不写工作区 CRUD、不 invoke Tauri、不改 Rust 业务。",
+        "allowedPaths": [
+          "package.json",
+          "package-lock.json",
+          "vite.config.ts",
+          "tsconfig.json",
+          "tsconfig.node.json",
+          "components.json",
+          "index.html",
+          "src/main.tsx",
+          "src/app/workspace-shell.tsx",
+          "src/styles/**",
+          "src/lib/cn.ts",
+          "src/lib/types.ts",
+          "src/components/ui/**",
+          "src/features/**",
+          "src/test/**"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/**",
+          "src-tauri/migrations/**",
+          "docs/product/workspace-manager-prd.md",
+          "docs/specs/data-model-and-storage-spec.md",
+          "docs/specs/platform-adapter-spec.md"
+        ],
+        "allowedChanges": [
+          "安装并配置 Tailwind CSS 4 与 @tailwindcss/vite",
+          "初始化 shadcn/ui，引入本包需要的基础组件",
+          "新增 src/lib/cn.ts",
+          "按工程规范创建 features 空目录和占位导出",
+          "把现有手写 CSS 三栏壳迁到 Tailwind，视觉方向仍参考 ui-direction-notes",
+          "给主流程关键节点保留或补齐 data-testid"
+        ],
+        "forbiddenChanges": [
+          "调用 invoke 或实现 workspace/app/canvas API",
+          "接入 Zustand 业务 store",
+          "实现添加软件、白板、窗口切换逻辑",
+          "新增 Rust 模块或 SQLite",
+          "引入全局快捷键或快速切换面板"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d01-tailwind",
+          "name": "Tailwind 4 可用",
+          "description": "Vite 能编译 Tailwind，三栏布局用 utility class 实现，不再依赖旧的大块 app.css 作为唯一样式源。"
+        },
+        {
+          "id": "d01-shadcn",
+          "name": "shadcn 基础组件",
+          "description": "至少具备 button、dialog、input、label、scroll-area、separator，以及 cn 工具。"
+        },
+        {
+          "id": "d01-dirs",
+          "name": "前端目录骨架",
+          "description": "存在 workspaces、apps、windows、canvas、api 目录，符合 kebab-case 文件命名约定。"
+        },
+        {
+          "id": "d01-shell",
+          "name": "可运行三栏壳",
+          "description": "npm run build 通过；开发态仍能看到工作区列表、中间主区、右侧白板占位。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s01-01",
+          "title": "安装 Tailwind CSS 4、@tailwindcss/vite、tailwind-merge、class-variance-authority、clsx",
+          "status": "pending",
+          "doneWhen": "依赖写入 package.json，Vite 插件生效，页面 class 能出样式。"
+        },
+        {
+          "id": "s01-02",
+          "title": "初始化 shadcn/ui 并添加本包基础组件",
+          "status": "pending",
+          "doneWhen": "存在 components.json 与 src/components/ui 下的基础组件，可在壳里引用 Button/Dialog/Input。"
+        },
+        {
+          "id": "s01-03",
+          "title": "新增 src/lib/cn.ts，统一 class 合并",
+          "status": "pending",
+          "doneWhen": "cn() 可供组件使用，不在各文件重复拼 class。"
+        },
+        {
+          "id": "s01-04",
+          "title": "按规范创建 features 与 api 空目录",
+          "status": "completed",
+          "doneWhen": "workspaces、apps、windows、canvas、api 目录存在；可放 README 或 index 占位，无业务实现。"
+        },
+        {
+          "id": "s01-05",
+          "title": "将 workspace-shell 从手写 CSS 迁到 Tailwind + shadcn",
+          "status": "pending",
+          "doneWhen": "三栏、侧栏、顶栏、添加软件弹窗外观仍接近参考图；旧 CSS 删除或只留极少量全局重置。"
+        },
+        {
+          "id": "s01-06",
+          "title": "保留主流程 data-testid，确认构建通过",
+          "status": "pending",
+          "doneWhen": "workspace-shell、create-workspace、add-app、app-card、whiteboard-panel 等测试 id 仍在；npm run build 成功。"
+        }
+      ],
+      "acceptance": [
+        "前端开发服务器能打开三栏界面",
+        "没有引入业务 API 或 Rust 改动",
+        "目录和文件命名符合工程规范"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-01-engineering-foundation/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-01-engineering-foundation/README.md"
+      }
+    },
+    {
+      "id": "pkg-02-storage-and-commands",
+      "seq": 2,
+      "title": "数据层、业务 command 与 mock 平台",
+      "status": "pending",
+      "dependsOn": [],
+      "parallelWith": [
+        "pkg-01-engineering-foundation"
+      ],
+      "ownerHint": "数据与本地存储智能体 / 平台适配智能体（仅 mock）",
+      "goal": "SQLite、domain、repository、service、Tauri command 和 mock PlatformAdapter 可用，前端下一包能对着真实 command 开发。",
+      "changeScope": {
+        "summary": "只改 Rust 后端：模型、迁移、存储、业务服务、command、mock 平台。不写 Windows Win32 实现，不大改 React 界面。",
+        "allowedPaths": [
+          "src-tauri/Cargo.toml",
+          "src-tauri/Cargo.lock",
+          "src-tauri/src/lib.rs",
+          "src-tauri/src/main.rs",
+          "src-tauri/src/errors.rs",
+          "src-tauri/src/domain/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/platform/**",
+          "src-tauri/migrations/**",
+          "src-tauri/tests/**",
+          "src/lib/types.ts"
+        ],
+        "forbiddenPaths": [
+          "src/app/**",
+          "src/features/workspaces/**",
+          "src/features/apps/**",
+          "src/features/canvas/**",
+          "src-tauri/src/platform/windows/app_scan.rs",
+          "src-tauri/src/platform/windows/window_ops.rs"
+        ],
+        "allowedChanges": [
+          "实现第一版竖切需要的 SQLite schema 与 migration",
+          "实现 workspaces / installed_apps / workspace_apps / native_windows / canvas / assets 的 repository 与 service",
+          "注册业务语义 command，返回 camelCase DTO",
+          "实现可注入的 PlatformAdapter trait 与内存 mock",
+          "mock 扫描列表、启动、聚焦、手动解析 exe/快捷方式",
+          "用临时数据库做 Rust 集成测试",
+          "如有必要，只同步 src/lib/types.ts 的字段，不改 UI"
+        ],
+        "forbiddenChanges": [
+          "实现真实开始菜单扫描、CreateProcess、EnumWindows、SetForegroundWindow",
+          "实现文件夹 / URL / 命令启动",
+          "实现窗口截图预览",
+          "实现快速切换快捷键",
+          "在 command 里写复杂业务而不走 service"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d02-schema",
+          "name": "SQLite migration",
+          "description": "覆盖 workspaces、installed_apps、workspace_apps、native_windows、canvas_nodes、canvas_edges、assets、app_settings。软删除、WAL、外键开启。"
+        },
+        {
+          "id": "d02-services",
+          "name": "业务服务",
+          "description": "工作区 CRUD、软件库合并、工作区软件去重、删除只软删关联、白板节点与资源落盘。不关闭、不卸载真实软件。"
+        },
+        {
+          "id": "d02-commands",
+          "name": "Tauri command 面",
+          "description": "见 markdown 中的 command 清单。错误为结构化 code + message，不是裸字符串。"
+        },
+        {
+          "id": "d02-mock",
+          "name": "Mock 平台适配",
+          "description": "可注入 adapter。扫描返回固定软件库；启动写入假窗口；聚焦可成功或返回 WindowClosed；手动添加只接受 exe/lnk 路径。"
+        },
+        {
+          "id": "d02-tests",
+          "name": "Rust 存储与业务测试",
+          "description": "临时库覆盖迁移、隔离、重复添加、删除语义、白板保存恢复。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s02-01",
+          "title": "拆分 domain 模型与错误类型",
+          "status": "pending",
+          "doneWhen": "Workspace、InstalledApp、WorkspaceApp、NativeWindow、CanvasNode、Asset、结构化错误码存在；序列化为 camelCase。"
+        },
+        {
+          "id": "s02-02",
+          "title": "写 migration 与数据库打开逻辑",
+          "status": "pending",
+          "doneWhen": "app data 目录下可创建 workspace-hub.sqlite3；PRAGMA foreign_keys/WAL 生效；迁移可重复执行。"
+        },
+        {
+          "id": "s02-03",
+          "title": "实现 repository 与 service",
+          "status": "pending",
+          "doneWhen": "工作区、软件库、工作区软件、窗口绑定、画布、资源都能事务写入；删除工作区不删 installed_apps。"
+        },
+        {
+          "id": "s02-04",
+          "title": "实现 PlatformAdapter trait 与 mock",
+          "status": "pending",
+          "doneWhen": "scan/launch/list_windows/focus/resolve_manual_target 可被 mock；Windows 真实实现可稍后替换。"
+        },
+        {
+          "id": "s02-05",
+          "title": "注册全部竖切 command 并接到 service",
+          "status": "pending",
+          "doneWhen": "lib.rs 注册清单中的 command；command 只做校验和调用，不含平台细节。"
+        },
+        {
+          "id": "s02-06",
+          "title": "首次启动空库，不写入示例工作区",
+          "status": "pending",
+          "doneWhen": "新数据库 list_workspaces 为空；mock 软件库可在 refresh 后出现。"
+        },
+        {
+          "id": "s02-07",
+          "title": "补 Rust 集成测试",
+          "status": "pending",
+          "doneWhen": "两个工作区数据隔离、重复添加不双绑、删工作区保留软件库、画布重启可读，均有测试。"
+        }
+      ],
+      "commands": [
+        "list_workspaces",
+        "create_workspace",
+        "rename_workspace",
+        "delete_workspace",
+        "set_active_workspace",
+        "list_workspace_apps",
+        "list_installed_apps",
+        "search_installed_apps",
+        "refresh_installed_apps",
+        "add_manual_app",
+        "launch_workspace_app",
+        "focus_workspace_app",
+        "remove_workspace_app",
+        "get_canvas",
+        "save_canvas",
+        "upsert_canvas_node",
+        "delete_canvas_node",
+        "save_canvas_asset"
+      ],
+      "acceptance": [
+        "cargo test 覆盖存储与业务规则",
+        "空库启动没有示例工作区",
+        "同一工作区重复添加同一 installed_app 不会插入第二行",
+        "删除工作区只软删本工作区数据"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-02-storage-and-commands/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-02-storage-and-commands/README.md"
+      }
+    },
+    {
+      "id": "pkg-03-frontend-workspace",
+      "seq": 3,
+      "title": "前端工作区主界面接通",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-01-engineering-foundation",
+        "pkg-02-storage-and-commands"
+      ],
+      "parallelWith": [
+        "pkg-05-windows-platform"
+      ],
+      "ownerHint": "前端工作区智能体",
+      "goal": "空状态能建工作区，能从软件库或手动 exe/快捷方式添加并启动，卡片能聚焦或提示重开，能移出软件和删除工作区。右侧白板本包只留入口占位。",
+      "changeScope": {
+        "summary": "实现 workspaces、apps、api、Zustand store 和主壳数据流。不实现 React Flow 白板，不写 Windows API，不做快速切换。",
+        "allowedPaths": [
+          "src/app/**",
+          "src/features/workspaces/**",
+          "src/features/apps/**",
+          "src/features/windows/**",
+          "src/features/api/**",
+          "src/lib/**",
+          "src/components/**",
+          "src/styles/**",
+          "src/test/**",
+          "src-tauri/tauri.conf.json"
+        ],
+        "forbiddenPaths": [
+          "src/features/canvas/components/**",
+          "src-tauri/src/platform/windows/**",
+          "src-tauri/migrations/**"
+        ],
+        "allowedChanges": [
+          "封装 tauri-client 与 workspace/app API，禁止组件直接 invoke",
+          "实现 workspace-store 与 workspace-app-store",
+          "空状态、创建/重命名/删除工作区确认弹窗",
+          "添加软件弹窗：搜索、已在工作区、刷新、手动选 exe/lnk",
+          "软件标签与卡片：启动中、运行中、已关闭、启动失败、聚焦失败",
+          "引入 tauri-plugin-dialog 仅用于选文件",
+          "Vitest 覆盖筛选、空状态、重复添加文案、删除确认文案"
+        ],
+        "forbiddenChanges": [
+          "实现完整白板节点编辑",
+          "实现快速切换面板和全局快捷键",
+          "前端出现 HWND、注册表、SetForegroundWindow",
+          "用 Zustand persist 当长期存储",
+          "把中间区域做成外部软件内嵌容器"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d03-api",
+          "name": "前端 API 封装",
+          "description": "callCommand 统一错误；workspaceApi / appApi 方法与 Rust command 一一对应。"
+        },
+        {
+          "id": "d03-empty-create",
+          "name": "空状态与工作区 CRUD",
+          "description": "无工作区时引导新建；创建后选中；删除确认写明不卸载、不关闭真实软件。"
+        },
+        {
+          "id": "d03-add-app",
+          "name": "添加软件主路径",
+          "description": "搜索 mock/真实软件库；点击添加并打开；已在工作区则聚焦；可手动选 exe 或 .lnk。"
+        },
+        {
+          "id": "d03-cards",
+          "name": "软件标签与卡片",
+          "description": "展示别名/状态/窗口标题；点击聚焦；窗口关闭可重开；移出工作区不关软件。"
+        },
+        {
+          "id": "d03-tests",
+          "name": "前端单测",
+          "description": "Vitest 覆盖空状态、创建、搜索过滤、已加入状态、删除文案。Playwright 完整主链路放到 pkg-06。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s03-01",
+          "title": "实现 tauri-client 与领域 API",
+          "status": "pending",
+          "doneWhen": "组件和 store 不再直接 import invoke；错误码可映射到界面文案。"
+        },
+        {
+          "id": "s03-02",
+          "title": "实现 workspace store 与侧栏",
+          "status": "pending",
+          "doneWhen": "启动拉列表；空则引导创建；创建/切换/重命名/删除走后端；删除有确认。"
+        },
+        {
+          "id": "s03-03",
+          "title": "实现 app store、添加弹窗、手动添加",
+          "status": "pending",
+          "doneWhen": "能搜索、刷新、添加并打开、识别已在工作区；文件对话框只选 exe/lnk。"
+        },
+        {
+          "id": "s03-04",
+          "title": "实现标签、卡片、关闭重开、移出工作区",
+          "status": "pending",
+          "doneWhen": "状态机覆盖 launching/running/closed/launchFailed/focusFailed；移出只调 remove_workspace_app。"
+        },
+        {
+          "id": "s03-05",
+          "title": "主壳组装与保存状态位",
+          "status": "pending",
+          "doneWhen": "WorkspaceShell 只编排布局和刷新；右侧白板仍是占位，但有稳定 testid。"
+        },
+        {
+          "id": "s03-06",
+          "title": "补 Vitest",
+          "status": "pending",
+          "doneWhen": "空状态、名称校验、搜索过滤、重复添加显示已在工作区、删除确认文案有测试。"
+        }
+      ],
+      "acceptance": [
+        "首次打开无工作区，能创建并进入",
+        "添加软件后中间出现卡片，重复添加不长出第二张",
+        "删除工作区确认文案包含不卸载、不关闭真实软件",
+        "前端代码不含平台 API 细节"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-03-frontend-workspace/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-03-frontend-workspace/README.md"
+      }
+    },
+    {
+      "id": "pkg-04-whiteboard-canvas",
+      "seq": 4,
+      "title": "白板：Markdown、图片、拖拽缩放、自动保存",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-01-engineering-foundation",
+        "pkg-02-storage-and-commands",
+        "pkg-03-frontend-workspace"
+      ],
+      "parallelWith": [],
+      "ownerHint": "白板 Canvas 智能体",
+      "goal": "右侧白板成为当前工作区的记录空间：Markdown 卡片、粘贴/拖入图片、拖拽缩放、自动保存，重启后按工作区恢复。",
+      "changeScope": {
+        "summary": "只做 canvas feature、画布与资源 API 的前端使用，以及必要的节点转换函数。不做待办、时间线、连线复杂编辑、手绘。",
+        "allowedPaths": [
+          "src/features/canvas/**",
+          "src/features/api/canvas-api.ts",
+          "src/app/workspace-shell.tsx",
+          "src/lib/types.ts",
+          "src/styles/**",
+          "src/test/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/src/domain/**"
+        ],
+        "forbiddenPaths": [
+          "src/features/apps/**",
+          "src-tauri/src/platform/windows/**"
+        ],
+        "allowedChanges": [
+          "用 @xyflow/react 做无限画布",
+          "Markdown 卡片：CodeMirror 编辑 + react-markdown 预览",
+          "图片卡片：剪贴板粘贴、拖入本地图片，经 save_canvas_asset 落盘",
+          "拖拽、缩放、选择、删除节点",
+          "防抖自动保存，顶栏显示保存中/已保存/失败可重试",
+          "持久化只存产品字段，剥离 React Flow 渲染态",
+          "若 command 不够用，只允许补 canvas/asset 相关后端，不改平台层"
+        ],
+        "forbiddenChanges": [
+          "待办卡片、操作记录时间线、撤销重做栈（可后做）",
+          "自动监听外部软件操作",
+          "把 React Flow 完整节点对象直接写入 SQLite",
+          "跨工作区共享一张画布",
+          "实现全局快捷键或快速切换"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d04-canvas",
+          "name": "工作区画布",
+          "description": "右侧面板展开 React Flow 画布，属于当前 selectedWorkspaceId。"
+        },
+        {
+          "id": "d04-markdown",
+          "name": "Markdown 卡片",
+          "description": "可新建、编辑、预览、删除、拖动；内容写入 contentMarkdown。"
+        },
+        {
+          "id": "d04-image",
+          "name": "图片卡片",
+          "description": "粘贴或拖入图片后先存 assets，节点只引用 assetId。"
+        },
+        {
+          "id": "d04-autosave",
+          "name": "自动保存与恢复",
+          "description": "移动/编辑后防抖保存；刷新或重启后位置和内容仍在；切换工作区不串数据。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s04-01",
+          "title": "实现 canvas store 与持久化转换函数",
+          "status": "pending",
+          "doneWhen": "toPersistedCanvasNode / fromPersistedCanvasNode 不包含 selected、dragging 等渲染字段。"
+        },
+        {
+          "id": "s04-02",
+          "title": "接入 React Flow 画布到右侧面板",
+          "status": "pending",
+          "doneWhen": "当前工作区可平移缩放；空画布可新建卡片。"
+        },
+        {
+          "id": "s04-03",
+          "title": "实现 Markdown 卡片编辑与预览",
+          "status": "pending",
+          "doneWhen": "双击或点击进入编辑，预览渲染 GFM；内容进入自动保存。"
+        },
+        {
+          "id": "s04-04",
+          "title": "实现图片粘贴、拖入与资源上传",
+          "status": "pending",
+          "doneWhen": "图片进 app data assets；数据库只存引用；缺失资源有可见降级。"
+        },
+        {
+          "id": "s04-05",
+          "title": "实现防抖自动保存和保存状态",
+          "status": "pending",
+          "doneWhen": "顶栏 save-status 在 saving/saved/save-failed 间切换；失败可重试。"
+        },
+        {
+          "id": "s04-06",
+          "title": "切换工作区与重启恢复",
+          "status": "pending",
+          "doneWhen": "切工作区立即换画布；重新打开应用后节点仍在原工作区。"
+        }
+      ],
+      "acceptance": [
+        "工作区 A 的卡片不会出现在工作区 B",
+        "重启后 Markdown 正文和图片卡片还在",
+        "图片不进 SQLite BLOB",
+        "中间区域仍然不是外部软件容器"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-04-whiteboard-canvas/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-04-whiteboard-canvas/README.md"
+      }
+    },
+    {
+      "id": "pkg-05-windows-platform",
+      "seq": 5,
+      "title": "Windows 真实扫描、启动与窗口置前",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-02-storage-and-commands"
+      ],
+      "parallelWith": [
+        "pkg-03-frontend-workspace",
+        "pkg-04-whiteboard-canvas"
+      ],
+      "ownerHint": "平台适配智能体",
+      "goal": "用 Windows 实现替换 mock：开始菜单扫描、启动 exe/快捷方式、枚举窗口、恢复并置前、解析手动 exe/lnk。业务 command 名称不变。",
+      "changeScope": {
+        "summary": "只改 platform 层和适配器装配。不改前端交互语义，不把 HWND 传到前端，不做安装包和全局快捷键。",
+        "allowedPaths": [
+          "src-tauri/src/platform/**",
+          "src-tauri/src/lib.rs",
+          "src-tauri/Cargo.toml",
+          "src-tauri/Cargo.lock",
+          "src-tauri/tauri.conf.json",
+          "src-tauri/tests/**"
+        ],
+        "forbiddenPaths": [
+          "src/app/**",
+          "src/features/**",
+          "src-tauri/migrations/**"
+        ],
+        "allowedChanges": [
+          "实现 Windows 开始菜单 .lnk 扫描，可选合并注册表卸载信息",
+          "启动 Executable 与 Shortcut",
+          "枚举顶层窗口并做 opaque NativeWindowId",
+          "恢复最小化窗口并尝试置前，区分 FocusDenied 与 WindowClosed",
+          "resolve 手动 exe / .lnk，拒绝 folder/url/command",
+          "读取应用图标到 assets 缓存（失败则默认图标）",
+          "Windows 集成测试用显式开关，不进入默认 cargo test"
+        ],
+        "forbiddenChanges": [
+          "实现文件夹 / URL / 命令启动",
+          "实现窗口实时预览或后台截图",
+          "把 HWND 或注册表路径暴露给前端 DTO",
+          "在前端或 workspace service 里直接调 Win32",
+          "默认以管理员运行",
+          "注册全局快捷键"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d05-scan",
+          "name": "开始菜单扫描",
+          "description": "refresh_installed_apps 能写入真实可启动项；按 fingerprint 合并，扫描不到只标不可用。"
+        },
+        {
+          "id": "d05-launch",
+          "name": "真实启动",
+          "description": "launch_workspace_app 能打开 exe 或快捷方式，并尽量在超时内绑定主窗口。"
+        },
+        {
+          "id": "d05-focus",
+          "name": "真实聚焦",
+          "description": "focus_workspace_app 能恢复最小化并尝试置前；关闭则 WindowClosed；系统拒绝则 FocusDenied。"
+        },
+        {
+          "id": "d05-manual",
+          "name": "手动 exe/lnk",
+          "description": "add_manual_app 经平台解析后再入库；坏路径返回 InvalidTarget/NotFound。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s05-01",
+          "title": "实现 Windows adapter 骨架并在装配时替换 mock",
+          "status": "pending",
+          "doneWhen": "cfg(windows) 默认用 Windows adapter；测试仍可注入 mock。"
+        },
+        {
+          "id": "s05-02",
+          "title": "实现开始菜单快捷方式扫描与去重",
+          "status": "pending",
+          "doneWhen": "能扫到记事本、浏览器等常见项；同启动目标不重复；不全盘深扫。"
+        },
+        {
+          "id": "s05-03",
+          "title": "实现启动与短时窗口匹配",
+          "status": "pending",
+          "doneWhen": "启动成功可无窗口（托盘/复用进程）但不误报失败；超时有明确错误。"
+        },
+        {
+          "id": "s05-04",
+          "title": "实现枚举、校验、恢复、置前",
+          "status": "pending",
+          "doneWhen": "句柄失效返回 WindowClosed；最小化可恢复；置前失败不假装成功。"
+        },
+        {
+          "id": "s05-05",
+          "title": "实现手动 exe/lnk 解析与图标读取",
+          "status": "pending",
+          "doneWhen": "有效路径给出 displayName 和建议图标；无效路径结构化失败；图标失败不阻断添加。"
+        },
+        {
+          "id": "s05-06",
+          "title": "隔离 Windows 原生测试",
+          "status": "pending",
+          "doneWhen": "默认 cargo test 不碰真实桌面；WINDOWS_NATIVE_TESTS=1 才跑原生用例。"
+        }
+      ],
+      "acceptance": [
+        "前端仍只调用业务 command",
+        "NativeWindowId 对前端是不透明字符串",
+        "手动目标仅 exe 与 shortcut",
+        "默认测试集不启动真实 GUI 软件"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-05-windows-platform/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-05-windows-platform/README.md"
+      }
+    },
+    {
+      "id": "pkg-06-integration-acceptance",
+      "seq": 6,
+      "title": "竖切联调、失败态与验收",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-03-frontend-workspace",
+        "pkg-04-whiteboard-canvas",
+        "pkg-05-windows-platform"
+      ],
+      "parallelWith": [],
+      "ownerHint": "测试与验收智能体 / 主控",
+      "goal": "把数据、界面、白板、Windows 适配收成一条可验收主链路，补齐失败态和自动化测试，并留下人工验收清单。",
+      "changeScope": {
+        "summary": "允许为联调改各层胶水、错误文案、测试和验收文档。不借机做 P1/P2，不打安装包，不注册全局快捷键。",
+        "allowedPaths": [
+          "src/**",
+          "src-tauri/src/**",
+          "src-tauri/tests/**",
+          "tests/e2e/**",
+          "docs/dev-plan/**",
+          "docs/specs/test-and-acceptance-plan.md",
+          "playwright.config.ts",
+          "package.json"
+        ],
+        "forbiddenPaths": [],
+        "allowedChanges": [
+          "打通 mock 与真实 adapter 下的同一条 UI 主链路",
+          "窗口已关闭提示与重新打开",
+          "删除工作区 / 移出软件的文案和数据结果核对",
+          "两个工作区软件与白板隔离",
+          "Vitest + Playwright + cargo test",
+          "Windows 人工验收清单和记录模板",
+          "修复竖切内的缺口和明显缺陷"
+        ],
+        "forbiddenChanges": [
+          "快速切换面板、可配置全局快捷键",
+          "安装包 / 签名 / 自动更新",
+          "待办卡片、操作时间线、窗口截图预览",
+          "文件夹 / URL / 命令",
+          "macOS 实现",
+          "费曼学习 Agent"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d06-e2e",
+          "name": "Playwright 主链路",
+          "description": "空状态创建、添加软件、重复添加、白板 Markdown/图片、工作区隔离、关闭提示、保存失败。可用 mock command。"
+        },
+        {
+          "id": "d06-rust",
+          "name": "Rust 回归",
+          "description": "存储、去重、删除语义、画布恢复默认测试全绿。"
+        },
+        {
+          "id": "d06-manual",
+          "name": "Windows 人工验收清单",
+          "description": "记事本或 Edge：启动、最小化恢复、关闭后重开、手动坏路径、删工作区后软件仍在。"
+        },
+        {
+          "id": "d06-report",
+          "name": "已自动 / 仍需人工对照表",
+          "description": "写在本包 markdown 或验收记录里，避免用前端测试冒充窗口置前已通过。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s06-01",
+          "title": "联调启动、聚焦、关闭、重开",
+          "status": "pending",
+          "doneWhen": "真实环境下点卡片能切窗；关掉软件后再点有提示和重开；不会无反馈。"
+        },
+        {
+          "id": "s06-02",
+          "title": "核对删除与移出语义",
+          "status": "pending",
+          "doneWhen": "删工作区或移出软件后，真实进程仍在，系统软件未被卸载，库中 installed_apps 仍在。"
+        },
+        {
+          "id": "s06-03",
+          "title": "核对双工作区隔离与重启恢复",
+          "status": "pending",
+          "doneWhen": "A/B 软件和白板不串；重启进入最近工作区，画布和软件还在。"
+        },
+        {
+          "id": "s06-04",
+          "title": "补齐 Playwright 与 Vitest",
+          "status": "pending",
+          "doneWhen": "npm test 与 npm run test:e2e 覆盖文档中的前端主链路；mock 用例标明不是 Windows 证据。"
+        },
+        {
+          "id": "s06-05",
+          "title": "补齐 Rust 默认测试与人工清单",
+          "status": "pending",
+          "doneWhen": "cargo test 绿；存在可勾选的 Windows 人工验收清单。"
+        },
+        {
+          "id": "s06-06",
+          "title": "标记本竖切完成，列出下一轮不做项",
+          "status": "pending",
+          "doneWhen": "总控 JSON 中本包与依赖包 status 可改为 completed；下一轮仍是快捷键/安装包/时间线等。"
+        }
+      ],
+      "acceptance": [
+        "竖切完成标准全部可演示",
+        "测试报告区分自动验证和人工验证",
+        "没有把 P1/P2 做进来"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-06-integration-acceptance/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-06-integration-acceptance/README.md"
+      }
+    }
+  ],
+  "folderStructure": "docs/dev-plan/folder-structure.md"
+}

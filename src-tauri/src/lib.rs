@@ -1,6 +1,9 @@
 pub mod commands;
 pub mod domain;
+pub mod errors;
 pub mod platform;
+pub mod services;
+pub mod storage;
 
 pub fn run() {
     tauri::Builder::default()

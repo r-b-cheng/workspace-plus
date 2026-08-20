@@ -1,0 +1,121 @@
+{
+  "id": "pkg-03-frontend-workspace",
+  "seq": 3,
+  "title": "前端工作区主界面接通",
+  "status": "pending",
+  "dependsOn": ["pkg-01-engineering-foundation", "pkg-02-storage-and-commands"],
+  "parallelWith": ["pkg-05-windows-platform"],
+  "ownerHint": "前端工作区智能体",
+  "goal": "空状态能建工作区，能从软件库或手动 exe/快捷方式添加并启动，卡片能聚焦或提示重开，能移出软件和删除工作区。右侧白板本包只留入口占位。",
+  "changeScope": {
+    "summary": "实现 workspaces、apps、api、Zustand store 和主壳数据流。不实现 React Flow 白板，不写 Windows API，不做快速切换。",
+    "allowedPaths": [
+      "src/app/**",
+      "src/features/workspaces/**",
+      "src/features/apps/**",
+      "src/features/windows/**",
+      "src/features/api/**",
+      "src/lib/**",
+      "src/components/**",
+      "src/styles/**",
+      "src/test/**",
+      "src-tauri/tauri.conf.json"
+    ],
+    "forbiddenPaths": [
+      "src/features/canvas/components/**",
+      "src-tauri/src/platform/windows/**",
+      "src-tauri/migrations/**"
+    ],
+    "allowedChanges": [
+      "封装 tauri-client 与 workspace/app API，禁止组件直接 invoke",
+      "实现 workspace-store 与 workspace-app-store",
+      "空状态、创建/重命名/删除工作区确认弹窗",
+      "添加软件弹窗：搜索、已在工作区、刷新、手动选 exe/lnk",
+      "软件标签与卡片：启动中、运行中、已关闭、启动失败、聚焦失败",
+      "引入 tauri-plugin-dialog 仅用于选文件",
+      "Vitest 覆盖筛选、空状态、重复添加文案、删除确认文案"
+    ],
+    "forbiddenChanges": [
+      "实现完整白板节点编辑",
+      "实现快速切换面板和全局快捷键",
+      "前端出现 HWND、注册表、SetForegroundWindow",
+      "用 Zustand persist 当长期存储",
+      "把中间区域做成外部软件内嵌容器"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d03-api",
+      "name": "前端 API 封装",
+      "description": "callCommand 统一错误；workspaceApi / appApi 方法与 Rust command 一一对应。"
+    },
+    {
+      "id": "d03-empty-create",
+      "name": "空状态与工作区 CRUD",
+      "description": "无工作区时引导新建；创建后选中；删除确认写明不卸载、不关闭真实软件。"
+    },
+    {
+      "id": "d03-add-app",
+      "name": "添加软件主路径",
+      "description": "搜索 mock/真实软件库；点击添加并打开；已在工作区则聚焦；可手动选 exe 或 .lnk。"
+    },
+    {
+      "id": "d03-cards",
+      "name": "软件标签与卡片",
+      "description": "展示别名/状态/窗口标题；点击聚焦；窗口关闭可重开；移出工作区不关软件。"
+    },
+    {
+      "id": "d03-tests",
+      "name": "前端单测",
+      "description": "Vitest 覆盖空状态、创建、搜索过滤、已加入状态、删除文案。Playwright 完整主链路放到 pkg-06。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s03-01",
+      "title": "实现 tauri-client 与领域 API",
+      "status": "pending",
+      "doneWhen": "组件和 store 不再直接 import invoke；错误码可映射到界面文案。"
+    },
+    {
+      "id": "s03-02",
+      "title": "实现 workspace store 与侧栏",
+      "status": "pending",
+      "doneWhen": "启动拉列表；空则引导创建；创建/切换/重命名/删除走后端；删除有确认。"
+    },
+    {
+      "id": "s03-03",
+      "title": "实现 app store、添加弹窗、手动添加",
+      "status": "pending",
+      "doneWhen": "能搜索、刷新、添加并打开、识别已在工作区；文件对话框只选 exe/lnk。"
+    },
+    {
+      "id": "s03-04",
+      "title": "实现标签、卡片、关闭重开、移出工作区",
+      "status": "pending",
+      "doneWhen": "状态机覆盖 launching/running/closed/launchFailed/focusFailed；移出只调 remove_workspace_app。"
+    },
+    {
+      "id": "s03-05",
+      "title": "主壳组装与保存状态位",
+      "status": "pending",
+      "doneWhen": "WorkspaceShell 只编排布局和刷新；右侧白板仍是占位，但有稳定 testid。"
+    },
+    {
+      "id": "s03-06",
+      "title": "补 Vitest",
+      "status": "pending",
+      "doneWhen": "空状态、名称校验、搜索过滤、重复添加显示已在工作区、删除确认文案有测试。"
+    }
+  ],
+  "acceptance": [
+    "首次打开无工作区，能创建并进入",
+    "添加软件后中间出现卡片，重复添加不长出第二张",
+    "删除工作区确认文案包含不卸载、不关闭真实软件",
+    "前端代码不含平台 API 细节"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-03-frontend-workspace/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-03-frontend-workspace/README.md"
+  }
+}

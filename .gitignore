@@ -7,8 +7,10 @@ dist/
 coverage/
 playwright-report/
 test-results/
+.playwright-cli/
 target/
 src-tauri/target/
+.codex-auth/
 *.log
 *.sqlite3
 *.sqlite3-*

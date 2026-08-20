@@ -1,0 +1,152 @@
+{
+  "id": "pkg-02-storage-and-commands",
+  "seq": 2,
+  "title": "数据层、业务 command 与 mock 平台",
+  "status": "pending",
+  "dependsOn": [],
+  "parallelWith": ["pkg-01-engineering-foundation"],
+  "ownerHint": "数据与本地存储智能体 / 平台适配智能体（仅 mock）",
+  "goal": "SQLite、domain、repository、service、Tauri command 和 mock PlatformAdapter 可用，前端下一包能对着真实 command 开发。",
+  "changeScope": {
+    "summary": "只改 Rust 后端：模型、迁移、存储、业务服务、command、mock 平台。不写 Windows Win32 实现，不大改 React 界面。",
+    "allowedPaths": [
+      "src-tauri/Cargo.toml",
+      "src-tauri/Cargo.lock",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/main.rs",
+      "src-tauri/src/errors.rs",
+      "src-tauri/src/domain/**",
+      "src-tauri/src/storage/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/platform/**",
+      "src-tauri/migrations/**",
+      "src-tauri/tests/**",
+      "src/lib/types.ts"
+    ],
+    "forbiddenPaths": [
+      "src/app/**",
+      "src/features/workspaces/**",
+      "src/features/apps/**",
+      "src/features/canvas/**",
+      "src-tauri/src/platform/windows/app_scan.rs",
+      "src-tauri/src/platform/windows/window_ops.rs"
+    ],
+    "allowedChanges": [
+      "实现第一版竖切需要的 SQLite schema 与 migration",
+      "实现 workspaces / installed_apps / workspace_apps / native_windows / canvas / assets 的 repository 与 service",
+      "注册业务语义 command，返回 camelCase DTO",
+      "实现可注入的 PlatformAdapter trait 与内存 mock",
+      "mock 扫描列表、启动、聚焦、手动解析 exe/快捷方式",
+      "用临时数据库做 Rust 集成测试",
+      "如有必要，只同步 src/lib/types.ts 的字段，不改 UI"
+    ],
+    "forbiddenChanges": [
+      "实现真实开始菜单扫描、CreateProcess、EnumWindows、SetForegroundWindow",
+      "实现文件夹 / URL / 命令启动",
+      "实现窗口截图预览",
+      "实现快速切换快捷键",
+      "在 command 里写复杂业务而不走 service"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d02-schema",
+      "name": "SQLite migration",
+      "description": "覆盖 workspaces、installed_apps、workspace_apps、native_windows、canvas_nodes、canvas_edges、assets、app_settings。软删除、WAL、外键开启。"
+    },
+    {
+      "id": "d02-services",
+      "name": "业务服务",
+      "description": "工作区 CRUD、软件库合并、工作区软件去重、删除只软删关联、白板节点与资源落盘。不关闭、不卸载真实软件。"
+    },
+    {
+      "id": "d02-commands",
+      "name": "Tauri command 面",
+      "description": "见 markdown 中的 command 清单。错误为结构化 code + message，不是裸字符串。"
+    },
+    {
+      "id": "d02-mock",
+      "name": "Mock 平台适配",
+      "description": "可注入 adapter。扫描返回固定软件库；启动写入假窗口；聚焦可成功或返回 WindowClosed；手动添加只接受 exe/lnk 路径。"
+    },
+    {
+      "id": "d02-tests",
+      "name": "Rust 存储与业务测试",
+      "description": "临时库覆盖迁移、隔离、重复添加、删除语义、白板保存恢复。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s02-01",
+      "title": "拆分 domain 模型与错误类型",
+      "status": "pending",
+      "doneWhen": "Workspace、InstalledApp、WorkspaceApp、NativeWindow、CanvasNode、Asset、结构化错误码存在；序列化为 camelCase。"
+    },
+    {
+      "id": "s02-02",
+      "title": "写 migration 与数据库打开逻辑",
+      "status": "pending",
+      "doneWhen": "app data 目录下可创建 workspace-hub.sqlite3；PRAGMA foreign_keys/WAL 生效；迁移可重复执行。"
+    },
+    {
+      "id": "s02-03",
+      "title": "实现 repository 与 service",
+      "status": "pending",
+      "doneWhen": "工作区、软件库、工作区软件、窗口绑定、画布、资源都能事务写入；删除工作区不删 installed_apps。"
+    },
+    {
+      "id": "s02-04",
+      "title": "实现 PlatformAdapter trait 与 mock",
+      "status": "pending",
+      "doneWhen": "scan/launch/list_windows/focus/resolve_manual_target 可被 mock；Windows 真实实现可稍后替换。"
+    },
+    {
+      "id": "s02-05",
+      "title": "注册全部竖切 command 并接到 service",
+      "status": "pending",
+      "doneWhen": "lib.rs 注册清单中的 command；command 只做校验和调用，不含平台细节。"
+    },
+    {
+      "id": "s02-06",
+      "title": "首次启动空库，不写入示例工作区",
+      "status": "pending",
+      "doneWhen": "新数据库 list_workspaces 为空；mock 软件库可在 refresh 后出现。"
+    },
+    {
+      "id": "s02-07",
+      "title": "补 Rust 集成测试",
+      "status": "pending",
+      "doneWhen": "两个工作区数据隔离、重复添加不双绑、删工作区保留软件库、画布重启可读，均有测试。"
+    }
+  ],
+  "commands": [
+    "list_workspaces",
+    "create_workspace",
+    "rename_workspace",
+    "delete_workspace",
+    "set_active_workspace",
+    "list_workspace_apps",
+    "list_installed_apps",
+    "search_installed_apps",
+    "refresh_installed_apps",
+    "add_manual_app",
+    "launch_workspace_app",
+    "focus_workspace_app",
+    "remove_workspace_app",
+    "get_canvas",
+    "save_canvas",
+    "upsert_canvas_node",
+    "delete_canvas_node",
+    "save_canvas_asset"
+  ],
+  "acceptance": [
+    "cargo test 覆盖存储与业务规则",
+    "空库启动没有示例工作区",
+    "同一工作区重复添加同一 installed_app 不会插入第二行",
+    "删除工作区只软删本工作区数据"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-02-storage-and-commands/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-02-storage-and-commands/README.md"
+  }
+}
