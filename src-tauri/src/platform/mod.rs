@@ -5,15 +5,14 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod macos;
 pub mod mock;
 pub mod rules;
-
-#[cfg(target_os = "macos")]
-pub mod macos;
 
 #[cfg(windows)]
 pub mod windows;
 
+pub use macos::MacOsPlatformAdapter;
 pub use mock::MockPlatformAdapter;
 
 #[cfg(windows)]
@@ -41,13 +40,20 @@ pub trait PlatformAdapter: Send + Sync {
     ) -> Result<ResolvedManualAppTarget, PlatformError>;
 }
 
-/// Builds the default adapter: Windows native on Windows, mock elsewhere.
+/// Builds the default adapter for the running OS.
+///
+/// Tests should keep injecting `MockPlatformAdapter`. Windows never uses the
+/// macOS adapter, and vice versa.
 pub fn default_adapter() -> std::sync::Arc<dyn PlatformAdapter> {
     #[cfg(windows)]
     {
         std::sync::Arc::new(WindowsPlatformAdapter::new())
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        std::sync::Arc::new(MacOsPlatformAdapter::new())
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         std::sync::Arc::new(MockPlatformAdapter::new())
     }

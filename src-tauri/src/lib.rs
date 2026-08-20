@@ -6,7 +6,7 @@ pub mod services;
 pub mod storage;
 
 pub use errors::AppError;
-pub use platform::{MockPlatformAdapter, PlatformAdapter};
+pub use platform::{MacOsPlatformAdapter, MockPlatformAdapter, PlatformAdapter};
 
 #[cfg(windows)]
 pub use platform::WindowsPlatformAdapter;

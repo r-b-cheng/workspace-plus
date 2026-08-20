@@ -83,6 +83,9 @@ export function SettingsDialog({
           <p className="text-sm text-muted-foreground" data-testid="settings-registration-status">
             注册状态：{statusLabel(settings?.registrationStatus)}
           </p>
+          <p className="text-sm text-muted-foreground" data-testid="settings-macos-accessibility-hint">
+            在 macOS 上，把窗口切到前面需要辅助功能权限。到系统设置 → 隐私与安全性 → 辅助功能里勾选本应用。没勾选时不会假装切换成功。
+          </p>
           {lastError ? (
             <p className="text-sm text-destructive" data-testid="settings-last-error">
               {lastError}

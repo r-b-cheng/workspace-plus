@@ -161,7 +161,22 @@ pub fn is_unwanted_shortcut_name(name: &str) -> bool {
 }
 
 pub fn is_executable_path(path: &str) -> bool {
-    path_extension(path) == "exe"
+    match path_extension(path).as_str() {
+        "exe" | "app" => true,
+        _ => is_macos_bundle_executable(path),
+    }
+}
+
+/// True for a file inside `Something.app/Contents/MacOS/`.
+pub fn is_macos_bundle_executable(path: &str) -> bool {
+    let normalized = trim_path(path).replace('\\', "/").to_ascii_lowercase();
+    let marker = ".app/contents/macos/";
+    if let Some(index) = normalized.find(marker) {
+        let after = &normalized[index + marker.len()..];
+        !after.is_empty() && !after.contains('/')
+    } else {
+        false
+    }
 }
 
 pub fn display_name_from_path(path: &str) -> String {
@@ -618,6 +633,21 @@ mod tests {
             classify_launch_path("").unwrap_err().code,
             PlatformErrorCode::InvalidTarget
         );
+    }
+
+    #[test]
+    fn treats_macos_bundle_paths_as_executable() {
+        assert!(is_executable_path("/Applications/Safari.app"));
+        assert!(is_executable_path(
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        ));
+        assert!(is_executable_path(
+            r"\Applications\Safari.app\Contents\MacOS\Safari"
+        ));
+        assert!(!is_executable_path("/Applications/Safari.app/Contents/Info.plist"));
+        assert!(!is_executable_path("/Applications/Safari.app/Contents/MacOS"));
+        assert!(is_executable_path(r"C:\Windows\notepad.exe"));
+        assert!(!is_executable_path(r"C:\notes.txt"));
     }
 
     #[test]

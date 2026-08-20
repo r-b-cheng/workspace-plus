@@ -1,6 +1,6 @@
 # pkg-11 macOS 扫描、启动与窗口聚焦
 
-状态：pending  
+状态：completed  
 依赖：pkg-09  
 可并行：pkg-10
 
@@ -30,8 +30,19 @@
 3. 未授权时给出系统设置指引。
 4. 默认测试不启动真实 GUI。
 
+## 子任务
+
+| ID | 子任务 | 完成标准 |
+|---|---|---|
+| s11-01 | adapter 骨架并装配 | macOS 默认走真实 adapter；测试仍可注入 mock |
+| s11-02 | 扫描与启动 | 能扫到常见 .app；能启动；坏路径结构化失败 |
+| s11-03 | 窗口枚举与聚焦 | 有权限可置前；无权限 FocusDenied；窗口没了 WindowClosed |
+| s11-04 | 隔离原生测试 | 默认 cargo test 不碰真实桌面；有人工清单 |
+
 ## 验收
 
 - 同一套 command 在 macOS 可用
 - 没权限时聚焦失败原因清楚
 - Windows 实现不被这包改坏
+
+真桌面请勾 `macos-manual-acceptance.md`。默认 `cargo test` 只跑纯函数，不要当成已经在 Mac 上切过真实窗口。

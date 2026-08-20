@@ -80,6 +80,8 @@ describe('全局设置弹窗', () => {
     expect(screen.getByTestId('settings-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('settings-shortcut-input')).toHaveValue('Alt+KeyK');
     expect(screen.getByTestId('settings-registration-status')).toHaveTextContent('已注册');
+    expect(screen.getByTestId('settings-macos-accessibility-hint')).toHaveTextContent('辅助功能');
+    expect(screen.getByTestId('settings-macos-accessibility-hint')).toHaveTextContent('系统设置');
     expect(screen.queryByTestId('settings-last-error')).not.toBeInTheDocument();
   });
 

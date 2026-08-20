@@ -2,7 +2,7 @@
   "id": "pkg-11-macos-platform",
   "seq": 11,
   "title": "macOS 扫描、启动与窗口聚焦",
-  "status": "pending",
+  "status": "completed",
   "dependsOn": [
     "pkg-09-p0-acceptance"
   ],
@@ -28,7 +28,7 @@
       "src-tauri/migrations/**"
     ],
     "allowedChanges": [
-      "实现 macOS 应用扫描、启动、窗口枚举、聚焦、图标",
+      "实现 macOS 应用扫描、启动、枚举窗口、聚焦、图标",
       "辅助功能权限检测与用户说明",
       "cfg(target_os = \"macos\") 默认走 macOS adapter",
       "原生测试用显式开关，不进默认 cargo test"
@@ -56,25 +56,25 @@
     {
       "id": "s11-01",
       "title": "macOS adapter 骨架并装配",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "macOS 默认走真实 adapter；测试仍可注入 mock。"
     },
     {
       "id": "s11-02",
       "title": "扫描与启动",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "能扫到常见 .app；能启动；坏路径结构化失败。"
     },
     {
       "id": "s11-03",
       "title": "窗口枚举与聚焦",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "有权限可置前；无权限 FocusDenied；窗口没了 WindowClosed。"
     },
     {
       "id": "s11-04",
       "title": "隔离原生测试与人工清单",
-      "status": "pending",
+      "status": "completed",
       "doneWhen": "默认 cargo test 不碰真实桌面；存在 macOS 人工清单。"
     }
   ],
