@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { appApi } from '@/features/api/app-api';
 import { AppApiError } from '@/features/api/tauri-client';
 import { statusFromErrorCode } from '@/features/windows/window-status';
-import { isWindowClosedError, userMessageForError } from '@/lib/errors';
+import { userMessageForError } from '@/lib/errors';
 import type { CommandError, InstalledApp, WorkspaceApp } from '@/lib/types';
 
 export type WorkspaceAppStoreData = {
@@ -230,25 +230,25 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
     } catch (error) {
       const appError = toCommandError(error);
       const status = statusFromErrorCode(appError.code);
+      const workspaceApps = get().workspaceApps.map((app) =>
+        app.id === workspaceAppId
+          ? {
+              ...app,
+              status,
+              errorMessage: appError.message,
+              windowTitle: status === 'closed' ? undefined : app.windowTitle,
+            }
+          : app,
+      );
+      const workspaceId = get().currentWorkspaceId;
       set({
         pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
         appError,
-        workspaceApps: get().workspaceApps.map((app) =>
-          app.id === workspaceAppId
-            ? {
-                ...app,
-                status,
-                errorMessage: appError.message,
-              }
-            : app,
-        ),
+        workspaceApps,
+        workspaceAppsByWorkspaceId: workspaceId
+          ? { ...get().workspaceAppsByWorkspaceId, [workspaceId]: workspaceApps }
+          : get().workspaceAppsByWorkspaceId,
       });
-      if (isWindowClosedError(appError) || get().currentWorkspaceId) {
-        const workspaceId = get().currentWorkspaceId;
-        if (workspaceId) {
-          await get().loadWorkspaceApps(workspaceId);
-        }
-      }
       return null;
     }
   },

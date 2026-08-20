@@ -14,6 +14,7 @@ import { EmptyWorkspacesState } from '@/features/workspaces/components/empty-wor
 import { RenameWorkspaceDialog } from '@/features/workspaces/components/rename-workspace-dialog';
 import { WorkspaceSidebar } from '@/features/workspaces/components/workspace-sidebar';
 import { useWorkspaceStore } from '@/features/workspaces/store/workspace-store';
+import { isWindowClosedError } from '@/lib/errors';
 
 export function WorkspaceShell() {
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -174,7 +175,12 @@ export function WorkspaceShell() {
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{workspaceError.message}</p>
         ) : null}
         {appError ? (
-          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{appError.message}</p>
+          <p
+            className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            data-testid={isWindowClosedError(appError) ? 'window-closed-banner' : 'app-error-banner'}
+          >
+            {appError.message}
+          </p>
         ) : null}
 
         {workspaceLoading && workspaces.length === 0 ? (

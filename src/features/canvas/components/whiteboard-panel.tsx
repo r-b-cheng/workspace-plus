@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 
 import { ImageCardNode } from '@/features/canvas/components/image-card-node';
 import { MarkdownCardNode } from '@/features/canvas/components/markdown-card-node';
+import { installCanvasE2eHooks } from '@/features/canvas/e2e-hooks';
 import { fromPersistedCanvasEdge, fromPersistedCanvasNode, type CanvasFlowData } from '@/features/canvas/persist';
 import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,8 @@ export function WhiteboardPanel({ workspaceId, workspaceName }: WhiteboardPanelP
   const canvasError = useCanvasStore((state) => state.canvasError);
   const canvasLoading = useCanvasStore((state) => state.canvasLoading);
   const canvasReady = Boolean(workspaceId) && !canvasLoading;
+
+  useEffect(() => installCanvasE2eHooks(), []);
 
   return (
     <aside

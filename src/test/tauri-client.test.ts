@@ -5,6 +5,7 @@ import { AppApiError, callCommand, normalizeTauriError } from '@/features/api/ta
 describe('callCommand 错误归一', () => {
   afterEach(() => {
     delete window.__TAURI_INVOKE_MOCK__;
+    delete window.__E2E_MOCK_INVOKE__;
   });
 
   it('把后端 AppError 形状归一成 code + message', () => {
@@ -21,6 +22,13 @@ describe('callCommand 错误归一', () => {
     };
 
     await expect(callCommand('list_workspaces')).resolves.toEqual([]);
+  });
+
+  it('优先使用 __E2E_MOCK_INVOKE__', async () => {
+    window.__TAURI_INVOKE_MOCK__ = async () => 'legacy' as never;
+    window.__E2E_MOCK_INVOKE__ = async () => 'e2e' as never;
+
+    await expect(callCommand('list_workspaces')).resolves.toBe('e2e');
   });
 
   it('mock 失败时抛出 AppApiError', async () => {

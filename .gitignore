@@ -10,6 +10,8 @@ test-results/
 .playwright-cli/
 target/
 src-tauri/target/
+src-tauri/gen/
+.cargo-target-*
 .codex-auth/
 *.log
 *.sqlite3

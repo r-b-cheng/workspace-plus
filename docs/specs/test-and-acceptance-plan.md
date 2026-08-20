@@ -102,4 +102,12 @@ cd src-tauri
 WINDOWS_NATIVE_TESTS=1 cargo test windows_native -- --ignored
 ```
 
-具体命令应以后续 `package.json`、`Cargo.toml` 和测试目录实际脚本为准。如果脚本尚未创建，本计划中的命令只作为命名约定。
+具体命令以仓库根目录 `package.json`、`playwright.config.ts` 和 `src-tauri/Cargo.toml` 为准。
+
+## 8. pkg-06 对照（自动 ≠ Windows 已通过）
+
+Playwright 主链路已落地，但全部走 `VITE_E2E=1` + `window.__E2E_MOCK_INVOKE__`，**不是**窗口置前、最小化恢复或真扫描的证据。已自动 / 仍需人工的逐项对照见：
+
+- `docs/dev-plan/packages/pkg-06-integration-acceptance/verification-matrix.md`
+- `docs/dev-plan/packages/pkg-06-integration-acceptance/windows-manual-acceptance.md`
+

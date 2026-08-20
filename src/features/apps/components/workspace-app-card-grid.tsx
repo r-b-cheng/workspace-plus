@@ -36,7 +36,7 @@ export function WorkspaceAppCardGrid({
   }
 
   return (
-    <section className="grid grid-cols-3 gap-3 max-[820px]:grid-cols-1">
+    <section className="grid grid-cols-3 gap-3 max-[820px]:grid-cols-1" data-testid="workspace-app-card-grid">
       {apps.map((app) => (
         <WorkspaceAppCard
           key={app.id}

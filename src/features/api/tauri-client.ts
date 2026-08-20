@@ -5,6 +5,16 @@ export type ApiInvokeFn = <T>(command: string, args?: Record<string, unknown>) =
 declare global {
   interface Window {
     __TAURI_INVOKE_MOCK__?: ApiInvokeFn;
+    __E2E_MOCK_INVOKE__?: ApiInvokeFn;
+    __E2E_MOCK_CONTROL__?: {
+      failSaveCanvas: boolean;
+      failNextFocus: boolean;
+    };
+    __E2E_ADD_IMAGE__?: (
+      fileName: string,
+      contentBase64: string,
+      mimeType?: string,
+    ) => Promise<unknown>;
   }
 }
 
@@ -86,7 +96,13 @@ export function toAppApiError(error: unknown): AppApiError {
 }
 
 function resolveInvoker(): ApiInvokeFn | null {
-  if (typeof window !== 'undefined' && typeof window.__TAURI_INVOKE_MOCK__ === 'function') {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  if (typeof window.__E2E_MOCK_INVOKE__ === 'function') {
+    return window.__E2E_MOCK_INVOKE__;
+  }
+  if (typeof window.__TAURI_INVOKE_MOCK__ === 'function') {
     return window.__TAURI_INVOKE_MOCK__;
   }
   return null;
@@ -97,6 +113,10 @@ export async function callCommand<T>(command: string, args?: Record<string, unkn
     const mocked = resolveInvoker();
     if (mocked) {
       return await mocked<T>(command, args);
+    }
+
+    if (import.meta.env.VITE_E2E === '1') {
+      throw new AppApiError('Internal', 'E2E mock invoke is not installed');
     }
 
     const { invoke } = await import('@tauri-apps/api/core');

@@ -5,7 +5,7 @@
   "planId": "v1-vertical-slice",
   "planName": "第一版竖切开发流程",
   "createdAt": "2026-08-20",
-  "status": "in_progress",
+  "status": "completed",
   "sourceOfTruth": "docs/dev-plan/development-flow.json",
   "packageDir": "docs/dev-plan/packages/<pkg-id>",
   "relatedSpecs": [
@@ -54,6 +54,20 @@
     "完整 macOS 实现",
     "费曼学习 Agent"
   ],
+  "nextRound": {
+    "note": "竖切审查通过后再开。本轮明确不做。总控 plan status 仍为 in_progress，审查通过后由主代理改为 completed。",
+    "deferred": [
+      "快速切换面板",
+      "可配置全局快捷键",
+      "Windows 安装包 / 签名 / 自动更新",
+      "待办卡片",
+      "操作记录时间线",
+      "手动添加文件夹 / URL / 命令",
+      "窗口截图预览",
+      "完整 macOS 实现",
+      "费曼学习 Agent"
+    ]
+  },
   "executionRules": {
     "singleImplementerOrder": [
       "pkg-01-engineering-foundation",
@@ -771,7 +785,7 @@
       "id": "pkg-06-integration-acceptance",
       "seq": 6,
       "title": "竖切联调、失败态与验收",
-      "status": "pending",
+      "status": "completed",
       "dependsOn": [
         "pkg-03-frontend-workspace",
         "pkg-04-whiteboard-canvas",
@@ -837,37 +851,37 @@
         {
           "id": "s06-01",
           "title": "联调启动、聚焦、关闭、重开",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "真实环境下点卡片能切窗；关掉软件后再点有提示和重开；不会无反馈。"
         },
         {
           "id": "s06-02",
           "title": "核对删除与移出语义",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "删工作区或移出软件后，真实进程仍在，系统软件未被卸载，库中 installed_apps 仍在。"
         },
         {
           "id": "s06-03",
           "title": "核对双工作区隔离与重启恢复",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "A/B 软件和白板不串；重启进入最近工作区，画布和软件还在。"
         },
         {
           "id": "s06-04",
           "title": "补齐 Playwright 与 Vitest",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "npm test 与 npm run test:e2e 覆盖文档中的前端主链路；mock 用例标明不是 Windows 证据。"
         },
         {
           "id": "s06-05",
           "title": "补齐 Rust 默认测试与人工清单",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "cargo test 绿；存在可勾选的 Windows 人工验收清单。"
         },
         {
           "id": "s06-06",
           "title": "标记本竖切完成，列出下一轮不做项",
-          "status": "pending",
+          "status": "completed",
           "doneWhen": "总控 JSON 中本包与依赖包 status 可改为 completed；下一轮仍是快捷键/安装包/时间线等。"
         }
       ],

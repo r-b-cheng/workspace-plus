@@ -31,6 +31,9 @@ const ERROR_COPY: Record<string, string> = {
 };
 
 export function userMessageForError(error: CommandError): string {
+  if (error.code === ERROR_CODES.WINDOW_CLOSED) {
+    return ERROR_COPY[ERROR_CODES.WINDOW_CLOSED];
+  }
   if (error.message.trim()) {
     return error.message;
   }
