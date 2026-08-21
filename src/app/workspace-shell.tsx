@@ -324,12 +324,12 @@ export function WorkspaceShell() {
         side="right"
         label="调整白板宽度"
         testId="right-panel-resize-handle"
-        hiddenClassName="max-[1180px]:hidden"
+        hiddenClassName="max-[900px]:hidden"
         onBegin={(clientX) => beginResize('right', clientX)}
         onMove={applyResize}
         onEnd={endResize}
       />
-      <div className="flex h-full shrink-0 max-[1180px]:hidden" style={{ width: layout.rightWidth }}>
+      <div className="flex h-full shrink-0 max-[900px]:hidden" style={{ width: layout.rightWidth }}>
         <WhiteboardPanel workspaceId={selectedWorkspaceId} workspaceName={selectedWorkspace?.name} />
       </div>
 

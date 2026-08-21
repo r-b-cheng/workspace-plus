@@ -9,6 +9,8 @@ import {
   LEFT_SIDEBAR_DEFAULT,
   LEFT_SIDEBAR_MAX,
   LEFT_SIDEBAR_MIN,
+  MIDDLE_PANE_MIN,
+  PANEL_HANDLE_WIDTH,
   normalizeShellLayout,
   resizedLeftWidth,
   resizedRightWidth,
@@ -79,11 +81,14 @@ describe('三栏宽度与左侧收缩', () => {
     expect(clampLeftWidth(80)).toBe(LEFT_SIDEBAR_MIN);
     expect(clampLeftWidth(999)).toBe(LEFT_SIDEBAR_MAX);
     expect(clampRightWidth(80)).toBe(RIGHT_SIDEBAR_MIN);
-    expect(clampRightWidth(999)).toBe(RIGHT_SIDEBAR_MAX);
+    expect(clampRightWidth(2000)).toBe(RIGHT_SIDEBAR_MAX);
+    expect(clampRightWidth(1200, { viewportWidth: 1440, leftDisplayed: LEFT_SIDEBAR_DEFAULT })).toBe(
+      1440 - LEFT_SIDEBAR_DEFAULT - PANEL_HANDLE_WIDTH * 2 - MIDDLE_PANE_MIN,
+    );
     expect(clampLeftWidth(Number.NaN)).toBe(LEFT_SIDEBAR_DEFAULT);
     expect(resizedLeftWidth(292, 292, 340)).toBe(340);
     expect(resizedRightWidth(390, 800, 760)).toBe(430);
-    expect(normalizeShellLayout({ leftWidth: 80, rightWidth: 900, leftCollapsed: true })).toEqual({
+    expect(normalizeShellLayout({ leftWidth: 80, rightWidth: 2000, leftCollapsed: true })).toEqual({
       leftWidth: LEFT_SIDEBAR_MIN,
       rightWidth: RIGHT_SIDEBAR_MAX,
       leftCollapsed: true,
@@ -124,7 +129,7 @@ describe('三栏宽度与左侧收缩', () => {
     });
   });
 
-  it('中间栏按自身宽度做容器查询，搜索不锁死最小宽', async () => {
+  it('中间栏按自身宽度动态排卡片，搜索不锁死最小宽', async () => {
     vi.mocked(appApi.listWorkspaceApps).mockResolvedValue([
       mockWorkspaceApp({ name: 'Very Long Application Name That Should Truncate' }),
     ]);
@@ -137,9 +142,10 @@ describe('三栏宽度与左侧收缩', () => {
 
     const grid = await screen.findByTestId('workspace-app-card-grid');
     expect(grid.className).not.toMatch(/max-\[820px\]/);
-    expect(grid.className).toMatch(/grid-cols-1/);
-    expect(grid.className).toMatch(/@\[420px\]:grid-cols-2/);
-    expect(grid.className).toMatch(/@\[720px\]:grid-cols-3/);
+    expect(grid.className).toMatch(/min-w-0/);
+    expect(grid.style.gridTemplateColumns).toMatch(/minmax\(0,\s*1fr\)/);
+    expect(grid).toHaveAttribute('data-layout');
+    expect(grid).toHaveAttribute('data-grid-cols');
 
     const card = screen.getByTestId('workspace-app-card');
     expect(card.className).toMatch(/min-w-0/);

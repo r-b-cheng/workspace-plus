@@ -7,7 +7,9 @@ export const LEFT_SIDEBAR_COLLAPSED = 72;
 
 export const RIGHT_SIDEBAR_DEFAULT = 390;
 export const RIGHT_SIDEBAR_MIN = 280;
-export const RIGHT_SIDEBAR_MAX = 640;
+export const RIGHT_SIDEBAR_MAX = 1400;
+export const MIDDLE_PANE_MIN = 280;
+export const PANEL_HANDLE_WIDTH = 6;
 
 export type ShellLayoutState = {
   leftWidth: number;
@@ -30,19 +32,42 @@ export function clampLeftWidth(width: number): number {
   return Math.min(LEFT_SIDEBAR_MAX, Math.max(LEFT_SIDEBAR_MIN, Math.round(width)));
 }
 
-export function clampRightWidth(width: number): number {
+export type RightWidthBounds = {
+  viewportWidth?: number;
+  leftDisplayed?: number;
+};
+
+export function maxRightWidthForViewport(viewportWidth: number, leftDisplayed: number): number {
+  const available =
+    viewportWidth - leftDisplayed - PANEL_HANDLE_WIDTH * 2 - MIDDLE_PANE_MIN;
+  return Math.max(RIGHT_SIDEBAR_MIN, Math.min(RIGHT_SIDEBAR_MAX, available));
+}
+
+export function clampRightWidth(width: number, bounds?: RightWidthBounds): number {
   if (!Number.isFinite(width)) {
     return RIGHT_SIDEBAR_DEFAULT;
   }
-  return Math.min(RIGHT_SIDEBAR_MAX, Math.max(RIGHT_SIDEBAR_MIN, Math.round(width)));
+  const ceiling =
+    bounds?.viewportWidth && bounds.viewportWidth > 0
+      ? maxRightWidthForViewport(
+          bounds.viewportWidth,
+          bounds.leftDisplayed ?? LEFT_SIDEBAR_DEFAULT,
+        )
+      : RIGHT_SIDEBAR_MAX;
+  return Math.min(ceiling, Math.max(RIGHT_SIDEBAR_MIN, Math.round(width)));
 }
 
 export function resizedLeftWidth(startWidth: number, startX: number, clientX: number): number {
   return clampLeftWidth(startWidth + (clientX - startX));
 }
 
-export function resizedRightWidth(startWidth: number, startX: number, clientX: number): number {
-  return clampRightWidth(startWidth - (clientX - startX));
+export function resizedRightWidth(
+  startWidth: number,
+  startX: number,
+  clientX: number,
+  bounds?: RightWidthBounds,
+): number {
+  return clampRightWidth(startWidth - (clientX - startX), bounds);
 }
 
 export function displayedLeftWidth(layout: ShellLayoutState): number {

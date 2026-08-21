@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  clampRightWidth,
+  displayedLeftWidth,
   LEFT_SIDEBAR_MIN,
   normalizeShellLayout,
   readShellLayout,
@@ -15,18 +17,25 @@ export function useShellLayout() {
   const layoutRef = useRef(layout);
   const dragRef = useRef<{ side: 'left' | 'right'; startX: number; startWidth: number } | null>(null);
 
-  useEffect(() => {
-    const next = readShellLayout();
-    layoutRef.current = next;
-    setLayout(next);
-  }, []);
-
   const persist = useCallback((next: ShellLayoutState) => {
     const normalized = normalizeShellLayout(next);
     layoutRef.current = normalized;
     setLayout(normalized);
     writeShellLayout(normalized);
   }, []);
+
+  useEffect(() => {
+    const next = fitLayoutToViewport(readShellLayout());
+    layoutRef.current = next;
+    setLayout(next);
+    writeShellLayout(next);
+
+    const onViewportResize = () => {
+      persist(fitLayoutToViewport(layoutRef.current));
+    };
+    window.addEventListener('resize', onViewportResize);
+    return () => window.removeEventListener('resize', onViewportResize);
+  }, [persist]);
 
   const setLeftCollapsed = useCallback(
     (leftCollapsed: boolean) => {
@@ -54,22 +63,23 @@ export function useShellLayout() {
       return;
     }
     const current = layoutRef.current;
+    const bounds = viewportBounds(current);
     if (drag.side === 'left') {
       const nextWidth = resizedLeftWidth(drag.startWidth, drag.startX, clientX);
       if (current.leftCollapsed && nextWidth >= LEFT_SIDEBAR_MIN) {
-        persist({ ...current, leftWidth: nextWidth, leftCollapsed: false });
+        persist(fitLayoutToViewport({ ...current, leftWidth: nextWidth, leftCollapsed: false }));
         return;
       }
       if (!current.leftCollapsed && drag.startWidth + (clientX - drag.startX) < LEFT_SIDEBAR_MIN - 24) {
-        persist({ ...current, leftCollapsed: true });
+        persist(fitLayoutToViewport({ ...current, leftCollapsed: true }));
         return;
       }
-      persist({ ...current, leftWidth: nextWidth, leftCollapsed: false });
+      persist(fitLayoutToViewport({ ...current, leftWidth: nextWidth, leftCollapsed: false }));
       return;
     }
     persist({
       ...current,
-      rightWidth: resizedRightWidth(drag.startWidth, drag.startX, clientX),
+      rightWidth: resizedRightWidth(drag.startWidth, drag.startX, clientX, bounds),
     });
   }, [persist]);
 
@@ -89,4 +99,18 @@ export function useShellLayout() {
 
 function defaultLayout(): ShellLayoutState {
   return readShellLayout();
+}
+
+function viewportBounds(layout: ShellLayoutState) {
+  return {
+    viewportWidth: typeof window === 'undefined' ? 0 : window.innerWidth,
+    leftDisplayed: displayedLeftWidth(layout),
+  };
+}
+
+function fitLayoutToViewport(layout: ShellLayoutState): ShellLayoutState {
+  return {
+    ...layout,
+    rightWidth: clampRightWidth(layout.rightWidth, viewportBounds(layout)),
+  };
 }

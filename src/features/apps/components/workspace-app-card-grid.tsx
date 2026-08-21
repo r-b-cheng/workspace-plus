@@ -1,3 +1,4 @@
+import { useAppCardGridLayout } from '@/features/apps/app-card-layout';
 import { WorkspaceAppCard } from '@/features/apps/components/workspace-app-card';
 import type { WorkspaceApp } from '@/lib/types';
 
@@ -31,19 +32,26 @@ export function WorkspaceAppCardGrid({
   onReopen,
   onRemove,
 }: WorkspaceAppCardGridProps) {
+  const { ref, columns, compact } = useAppCardGridLayout();
+
   if (apps.length === 0) {
     return null;
   }
 
   return (
     <section
-      className="grid min-w-0 grid-cols-1 gap-3 @[420px]:grid-cols-2 @[720px]:grid-cols-3"
+      ref={ref}
+      className="grid min-w-0 gap-3"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       data-testid="workspace-app-card-grid"
+      data-grid-cols={columns}
+      data-layout={compact ? 'stack' : 'grid'}
     >
       {apps.map((app) => (
         <WorkspaceAppCard
           key={app.id}
           app={app}
+          compact={compact}
           pending={pendingAppIds.includes(app.id)}
           onActivate={onActivate}
           onReopen={onReopen}

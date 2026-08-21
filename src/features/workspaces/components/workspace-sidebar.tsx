@@ -1,5 +1,6 @@
 import { MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
 
+import { AppMark } from '@/components/app-mark';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -38,7 +39,7 @@ export function WorkspaceSidebar({
       data-collapsed={collapsed ? 'true' : 'false'}
     >
       <div className={cn('flex items-center font-bold', collapsed ? 'mb-4 flex-col gap-2' : 'mb-7 gap-3.5')}>
-        <div className="grid size-[34px] place-items-center rounded-lg bg-[#1f78ff] text-white">X</div>
+        <AppMark decorative={!collapsed} />
         {collapsed ? null : <span>Workspace Hub</span>}
         <Button
           type="button"
