@@ -5,6 +5,7 @@ import {
   Background,
   ConnectionMode,
   Controls,
+  getNodesBounds,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -15,7 +16,17 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import { ArrowUpRight, Circle, FilePlus2, Minus, MoreHorizontal, MousePointer2, Pencil, Square, Type } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 
 import { Button } from '@/components/ui/button';
 import { DrawingLayer, type DrawingLayerHandle } from '@/features/canvas/components/drawing-layer';
@@ -30,6 +41,7 @@ import {
   isValidCanvasConnection,
   type CanvasFlowData,
 } from '@/features/canvas/persist';
+import { boundingBox, unionBoundingBoxes } from '@/features/canvas/scene-transform';
 import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import { cn } from '@/lib/cn';
 import type { CanvasDrawingTool } from '@/lib/types';
@@ -61,6 +73,7 @@ export function WhiteboardPanel({ workspaceId, workspaceName }: WhiteboardPanelP
   const drawingTool = useCanvasStore((state) => state.drawingTool);
   const setDrawingTool = useCanvasStore((state) => state.setDrawingTool);
   const canvasReady = Boolean(workspaceId) && !canvasLoading;
+  const canvasRef = useRef<WorkspaceCanvasHandle>(null);
 
   useEffect(() => installCanvasE2eHooks(), []);
 
@@ -85,17 +98,11 @@ export function WhiteboardPanel({ workspaceId, workspaceName }: WhiteboardPanelP
               <FilePlus2 size={16} />
               新建 Markdown
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="size-9"
-              aria-label="白板已打开"
-              data-testid="open-whiteboard-button"
+            <WhiteboardMoreMenu
               disabled={!canvasReady}
-            >
-              <MoreHorizontal size={18} />
-            </Button>
+              onFitView={() => canvasRef.current?.fitContent()}
+              onAddImages={(files) => canvasRef.current?.addImageFiles(files)}
+            />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5" data-testid="canvas-drawing-tools">
@@ -123,8 +130,8 @@ export function WhiteboardPanel({ workspaceId, workspaceName }: WhiteboardPanelP
       ) : null}
 
       {workspaceId ? (
-        <ReactFlowProvider>
-          <WorkspaceCanvas key={workspaceId} workspaceId={workspaceId} />
+        <ReactFlowProvider key={workspaceId}>
+          <WorkspaceCanvas ref={canvasRef} workspaceId={workspaceId} />
         </ReactFlowProvider>
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2 p-6 text-sm text-muted-foreground">
@@ -140,7 +147,103 @@ export function WhiteboardPanel({ workspaceId, workspaceName }: WhiteboardPanelP
   );
 }
 
-function WorkspaceCanvas({ workspaceId }: { workspaceId: string }) {
+type WhiteboardMoreMenuProps = {
+  disabled: boolean;
+  onFitView: () => void;
+  onAddImages: (files: File[]) => void;
+};
+
+function WhiteboardMoreMenu({ disabled, onFitView, onAddImages }: WhiteboardMoreMenuProps) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    function handlePointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="size-9"
+        aria-label="白板更多操作"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-testid="whiteboard-more-button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <MoreHorizontal size={18} />
+      </Button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        data-testid="whiteboard-add-image-input"
+        onChange={(event) => {
+          const files = [...(event.currentTarget.files ?? [])].filter((file) => file.type.startsWith('image/'));
+          event.currentTarget.value = '';
+          if (files.length > 0) {
+            onAddImages(files);
+          }
+        }}
+      />
+      {open ? (
+        <div
+          className="absolute top-10 right-0 z-20 grid min-w-36 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
+          role="menu"
+        >
+          <button
+            type="button"
+            className="px-3 py-2 text-left text-sm hover:bg-accent"
+            role="menuitem"
+            data-testid="whiteboard-fit-view"
+            onClick={() => {
+              setOpen(false);
+              onFitView();
+            }}
+          >
+            适应画布
+          </button>
+          <button
+            type="button"
+            className="px-3 py-2 text-left text-sm hover:bg-accent"
+            role="menuitem"
+            data-testid="whiteboard-add-image"
+            onClick={() => {
+              setOpen(false);
+              fileInputRef.current?.click();
+            }}
+          >
+            添加图片
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type WorkspaceCanvasHandle = {
+  fitContent: () => void;
+  addImageFiles: (files: File[]) => void;
+};
+
+const WorkspaceCanvas = forwardRef<WorkspaceCanvasHandle, { workspaceId: string }>(
+  function WorkspaceCanvas({ workspaceId }, ref) {
   const storeWorkspaceId = useCanvasStore((state) => state.workspaceId);
   const productNodes = useCanvasStore((state) => state.nodes);
   const productEdges = useCanvasStore((state) => state.edges);
@@ -154,7 +257,7 @@ function WorkspaceCanvas({ workspaceId }: { workspaceId: string }) {
   const drawingTool = useCanvasStore((state) => state.drawingTool);
   const selectedElementIds = useCanvasStore((state) => state.selectedElementIds);
   const setSelectedElementIds = useCanvasStore((state) => state.setSelectedElementIds);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getNodes, fitBounds, setViewport } = useReactFlow();
   const paneRef = useRef<HTMLDivElement>(null);
   const drawingLayerRef = useRef<DrawingLayerHandle>(null);
   const drawing = drawingTool !== 'select';
@@ -252,13 +355,43 @@ function WorkspaceCanvas({ workspaceId }: { workspaceId: string }) {
   );
 
   const addImages = useCallback(
-    (files: File[], position?: { x: number; y: number }) => {
-      for (const file of files) {
-        void addImageFromFile(file, file.name ? 'drag_drop' : 'clipboard', position);
-      }
+    (files: File[], position?: { x: number; y: number }, source: 'clipboard' | 'drag_drop' | 'manual_import' = 'drag_drop') => {
+      files.forEach((file, index) => {
+        const nextPosition = position
+          ? { x: position.x + index * 24, y: position.y + index * 24 }
+          : undefined;
+        void addImageFromFile(file, source, nextPosition);
+      });
     },
     [addImageFromFile],
   );
+
+  const addImageFiles = useCallback(
+    (files: File[]) => {
+      const rect = paneRef.current?.getBoundingClientRect();
+      const position = rect
+        ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+        : { x: 96, y: 96 };
+      addImages(files, position, 'manual_import');
+    },
+    [addImages, screenToFlowPosition],
+  );
+
+  const fitContent = useCallback(() => {
+    const nodeBoxes =
+      getNodes().length > 0
+        ? [getNodesBounds(getNodes())]
+        : [];
+    const drawingBoxes = useCanvasStore.getState().scene.elements.map(boundingBox);
+    const bounds = unionBoundingBoxes([...nodeBoxes, ...drawingBoxes]);
+    if (!bounds) {
+      void setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 180 });
+      return;
+    }
+    void fitBounds(bounds, { padding: 0.18, duration: 180 });
+  }, [fitBounds, getNodes, setViewport]);
+
+  useImperativeHandle(ref, () => ({ fitContent, addImageFiles }), [addImageFiles, fitContent]);
 
   const onDragOver = useCallback((event: DragEvent) => {
     event.preventDefault();
@@ -391,12 +524,12 @@ function WorkspaceCanvas({ workspaceId }: { workspaceId: string }) {
       </ReactFlow>
       {!canvasLoading && nodes.length === 0 && scene.elements.length === 0 ? (
         <div className="pointer-events-none absolute inset-x-4 top-4 rounded-[10px] border border-dashed border-border bg-card/90 p-4 text-sm text-muted-foreground">
-          空画布。新建 Markdown 卡片，或粘贴、拖入图片。内容会按当前工作区自动保存。可从卡片边缘拉箭头连到另一张卡片。可用顶栏画笔、箭头和形状。
+          空画布。新建 Markdown 卡片，或从右上角添加图片，也可以粘贴、拖入。内容会按当前工作区自动保存。可从卡片边缘拉箭头连到另一张卡片。可用顶栏画笔、箭头和形状。
         </div>
       ) : null}
     </div>
   );
-}
+});
 
 function clipboardImageFiles(event: ClipboardEvent): File[] {
   const files: File[] = [];

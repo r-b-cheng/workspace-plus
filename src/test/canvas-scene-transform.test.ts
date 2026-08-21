@@ -5,6 +5,7 @@ import {
   moveElement,
   moveLineEndpoint,
   resizeElement,
+  unionBoundingBoxes,
 } from '@/features/canvas/scene-transform';
 import type {
   CanvasSceneLineElement,
@@ -112,5 +113,15 @@ describe('scene-transform', () => {
       return;
     }
     expect(next.fontSize).toBe(10);
+  });
+
+  it('合并多块包围盒', () => {
+    expect(unionBoundingBoxes([])).toBeNull();
+    expect(
+      unionBoundingBoxes([
+        { x: 0, y: 0, width: 10, height: 8 },
+        { x: 20, y: -4, width: 5, height: 6 },
+      ]),
+    ).toEqual({ x: 0, y: -4, width: 25, height: 12 });
   });
 });

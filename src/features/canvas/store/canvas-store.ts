@@ -73,7 +73,7 @@ export type CanvasStore = CanvasStoreData & {
   setSelectedElementIds: (elementIds: string[]) => void;
   addImageFromFile: (
     file: File,
-    source: 'clipboard' | 'drag_drop',
+    source: 'clipboard' | 'drag_drop' | 'manual_import',
     position?: { x: number; y: number },
   ) => Promise<CanvasNode | null>;
   scheduleSave: () => void;
@@ -445,7 +445,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
     const workspaceId = state.workspaceId;
     if (!isImageFile(file)) {
-      set({ canvasError: { code: 'Validation', message: '只支持粘贴或拖入图片。' } });
+      set({ canvasError: { code: 'Validation', message: '只支持图片文件。' } });
       return null;
     }
     try {
