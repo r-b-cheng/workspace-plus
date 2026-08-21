@@ -1,0 +1,116 @@
+{
+  "id": "pkg-20-window-liveness",
+  "seq": 20,
+  "title": "窗口关闭及时对账",
+  "status": "completed",
+  "dependsOn": [
+    "pkg-10-multi-window"
+  ],
+  "parallelWith": [],
+  "ownerHint": "平台适配智能体 / 前端工作区智能体",
+  "goal": "用户关掉外部窗口后，当前工作区的运行状态和窗口列表尽快变为已关闭。不移出软件。前端无 HWND。",
+  "changeScope": {
+    "summary": "已绑定窗口的存活：WinEvent 过滤 + 进程退出 + 当前工作区 2 秒看门狗。变化通过语义事件推到前端。",
+    "allowedPaths": [
+      "src-tauri/src/platform/windows/**",
+      "src-tauri/src/platform/mod.rs",
+      "src-tauri/src/services/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/domain/**",
+      "src-tauri/tests/**",
+      "src/features/apps/**",
+      "src/features/windows/**",
+      "src/features/api/**",
+      "src/app/workspace-shell.tsx",
+      "src/lib/types.ts",
+      "src/test/**",
+      "docs/dev-plan/packages/pkg-20-window-liveness/**",
+      "docs/product/window-liveness.md"
+    ],
+    "forbiddenPaths": [
+      "src/features/agent/**",
+      "src/features/canvas/components/**",
+      "src/features/quick-switch/**",
+      "src-tauri/src/platform/macos/**",
+      "src-tauri/migrations/**"
+    ],
+    "allowedChanges": [
+      "Windows 仅 EVENT_OBJECT_DESTROY 算关闭；HIDE/CLOAKED 不算",
+      "钩子回调只放行当前 running 绑定集合里的 opaque id，不要求顶层",
+      "绑定窗口时登记进程退出等待；先对账再从 wait set 去掉 pid",
+      "看门狗：当前工作区 running 与 window_closed，桌面只枚举一次",
+      "正在预览的 opaque id 不能因 EnumWindows 看不到而标 closed；看门狗对当前预览 hwnd 做 IsWindow",
+      "workspace-windows-changed 可带 previewReleased；无 hwnd",
+      "前端原地刷新；切走或新预览后丢弃过期 apply；previewReleased 才退预览",
+      "钩子失败则只靠看门狗，应用仍能启动"
+    ],
+    "forbiddenChanges": [
+      "键盘钩子、剪贴板、后台截屏",
+      "把 HWND 或 WinEvent 常量传给前端",
+      "关掉窗口就 remove_workspace_app",
+      "10Hz 全桌面 EnumWindows",
+      "Chromium/Electron SetParent",
+      "实现 pkg-13 活动时间线",
+      "macOS Accessibility 观察"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d20-events",
+      "name": "关闭事件对账",
+      "description": "已绑定顶层窗口消失后标 closed，无剩余窗口则软件 window_closed。"
+    },
+    {
+      "id": "d20-watchdog",
+      "name": "看门狗",
+      "description": "当前工作区 running 软件约 2 秒对一次账；无变化不刷 UI。"
+    },
+    {
+      "id": "d20-ui",
+      "name": "前端及时更新",
+      "description": "标签和窗口列表不必再点一次就能看到已关闭。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s20-01",
+      "title": "平台关闭信号",
+      "status": "completed",
+      "doneWhen": "Windows 能把已绑定顶层窗口消失和进程退出收成语义回调；测试不启真实 GUI。"
+    },
+    {
+      "id": "s20-02",
+      "title": "Service 对账与事件",
+      "status": "completed",
+      "doneWhen": "复用 sync_workspace_app_windows；emit workspace-windows-changed；无 hwnd。"
+    },
+    {
+      "id": "s20-03",
+      "title": "前端订阅",
+      "status": "completed",
+      "doneWhen": "当前工作区刷新列表；预览中窗口关闭则退出预览。"
+    },
+    {
+      "id": "s20-04",
+      "title": "测试",
+      "status": "completed",
+      "doneWhen": "Rust/Vitest 覆盖对账与事件载荷；人工清单记事本关窗。"
+    }
+  ],
+  "commands": [
+    "list_workspace_app_windows"
+  ],
+  "acceptance": [
+    "关掉窗口后标签不再假运行中",
+    "软件仍在工作区，可重开",
+    "前端无 HWND",
+    "不实现活动时间线"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-20-window-liveness/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-20-window-liveness/README.md",
+    "product": "docs/product/window-liveness.md",
+    "manualAcceptance": "docs/dev-plan/packages/pkg-20-window-liveness/windows-liveness-manual-acceptance.md"
+  }
+}

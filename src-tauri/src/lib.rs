@@ -10,7 +10,10 @@ pub use platform::{MacOsPlatformAdapter, MockPlatformAdapter, PlatformAdapter};
 
 #[cfg(windows)]
 pub use platform::WindowsPlatformAdapter;
-pub use services::AppService;
+pub use services::{
+    AppService, CapturingWindowChangeSink, WindowChangeSink, WorkspaceWindowsChanged,
+    WORKSPACE_WINDOWS_CHANGED_EVENT,
+};
 
 use tauri::Manager;
 use tauri_plugin_global_shortcut::ShortcutState;
@@ -35,6 +38,7 @@ pub fn run() {
                 .map_err(|err| err.to_string())?;
             commands::settings::apply_quick_switch_shortcut(app.handle(), &service, None);
             app.manage(service);
+            crate::services::start_window_liveness(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -32,6 +32,14 @@ pub trait PlatformAdapter: Send + Sync {
         request: &ListWindowsRequest,
     ) -> Result<Vec<PlatformWindow>, PlatformError>;
 
+    /// True when `native_window_id` still names an open window.
+    ///
+    /// Used to drop stale enum matches before they are written. Default is
+    /// permissive so macOS can keep the watchdog-only path.
+    fn window_is_open(&self, _native_window_id: &str) -> bool {
+        true
+    }
+
     fn focus_window(&self, request: &FocusWindowRequest) -> Result<FocusWindowResult, PlatformError>;
 
     fn resolve_manual_app_target(

@@ -195,3 +195,5 @@ type WorkspaceView = 'dispatcher' | 'preview';
 - 前端源码和错误 JSON 不含 hwnd。
 
 人工（Windows）：见开发包手工清单。记事本应能铺满中间栏主体并在其中输入；Edge / Electron / UWP / 管理员窗口必须失败并回退，不许装成功。
+
+Chromium / Electron 不能用 `SetParent` 嵌进来操作：独立 GPU 合成、多层子窗口和沙箱会黑屏或丢输入。这不是提示写错。后续若要「看见」，另做 DWM 缩略图，不要假装能在本窗口里操作 Edge。关掉窗口后的列表更新见 `docs/product/window-liveness.md`。

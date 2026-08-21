@@ -10,6 +10,7 @@ import { WorkspaceAppTabs } from '@/features/apps/components/workspace-app-tabs'
 import { WorkspaceOverview } from '@/features/apps/components/workspace-overview';
 import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
 import { EmbedPreviewHost } from '@/features/windows/components/embed-preview-host';
+import { useWindowsChangedBridge } from '@/features/windows/listen-windows-changed';
 import { WhiteboardPanel } from '@/features/canvas/components/whiteboard-panel';
 import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import { settingsApi } from '@/features/api/settings-api';
@@ -32,6 +33,7 @@ function settingsCommandErrorMessage(error: unknown): string {
 
 export function WorkspaceShell() {
   useQuickSwitchBridge();
+  useWindowsChangedBridge();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const selectedWorkspaceId = useWorkspaceStore((state) => state.selectedWorkspaceId);
   const workspaceLoading = useWorkspaceStore((state) => state.workspaceLoading);

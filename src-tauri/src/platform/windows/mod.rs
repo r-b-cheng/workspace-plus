@@ -16,6 +16,7 @@ mod app_scan;
 pub(crate) mod embed;
 mod icon;
 mod manual_target;
+pub(crate) mod win_events;
 mod window_ops;
 
 pub(crate) fn resolve_shortcut_exe(path: &str) -> Option<String> {
@@ -63,6 +64,10 @@ impl PlatformAdapter for WindowsPlatformAdapter {
         _request: &ListWindowsRequest,
     ) -> Result<Vec<PlatformWindow>, PlatformError> {
         window_ops::list_top_level_windows()
+    }
+
+    fn window_is_open(&self, native_window_id: &str) -> bool {
+        window_ops::window_is_open(native_window_id)
     }
 
     fn focus_window(&self, request: &FocusWindowRequest) -> Result<FocusWindowResult, PlatformError> {

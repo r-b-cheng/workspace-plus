@@ -18,6 +18,7 @@ struct MockWindow {
     process_id: u32,
     process_path: Option<String>,
     closed: bool,
+    hidden_from_enum: bool,
 }
 
 /// Fixed-catalog mock that records launched windows in memory.
@@ -25,6 +26,7 @@ pub struct MockPlatformAdapter {
     windows: Mutex<HashMap<String, MockWindow>>,
     next_pid: AtomicU32,
     omit_window_on_next_launch: AtomicBool,
+    list_windows_calls: AtomicU32,
 }
 
 impl MockPlatformAdapter {
@@ -33,6 +35,7 @@ impl MockPlatformAdapter {
             windows: Mutex::new(HashMap::new()),
             next_pid: AtomicU32::new(10_000),
             omit_window_on_next_launch: AtomicBool::new(false),
+            list_windows_calls: AtomicU32::new(0),
         }
     }
 
@@ -50,9 +53,27 @@ impl MockPlatformAdapter {
         }
     }
 
+    /// Hides a still-open window from `list_windows`, like a SetParented child.
+    pub fn omit_from_enum(&self, native_window_id: &str) {
+        if let Ok(mut windows) = self.windows.lock() {
+            if let Some(window) = windows.get_mut(native_window_id) {
+                window.hidden_from_enum = true;
+            }
+        }
+    }
+
+    pub fn list_windows_call_count(&self) -> u32 {
+        self.list_windows_calls.load(Ordering::Relaxed)
+    }
+
     /// Opens a synthetic window without going through launch. Used to test rediscovery.
     pub fn open_window(&self, title: &str, process_path: &str) -> String {
         let process_id = self.next_pid.fetch_add(1, Ordering::Relaxed);
+        self.open_window_with_pid(title, process_path, process_id)
+    }
+
+    /// Opens a synthetic window with a chosen pid so process-exit tests can share one process.
+    pub fn open_window_with_pid(&self, title: &str, process_path: &str, process_id: u32) -> String {
         let native_window_id = format!("mock:{}", new_id());
         if let Ok(mut windows) = self.windows.lock() {
             windows.insert(
@@ -62,10 +83,19 @@ impl MockPlatformAdapter {
                     process_id,
                     process_path: Some(process_path.to_string()),
                     closed: false,
+                    hidden_from_enum: false,
                 },
             );
         }
         native_window_id
+    }
+
+    pub fn window_process_id(&self, native_window_id: &str) -> Option<u32> {
+        self.windows
+            .lock()
+            .ok()?
+            .get(native_window_id)
+            .map(|window| window.process_id)
     }
 
     fn catalog() -> Vec<ScannedApp> {
@@ -202,6 +232,7 @@ impl PlatformAdapter for MockPlatformAdapter {
                 process_id,
                 process_path: Some(request.launch_target.clone()),
                 closed: false,
+                hidden_from_enum: false,
             },
         );
         Ok(LaunchResult {
@@ -216,13 +247,14 @@ impl PlatformAdapter for MockPlatformAdapter {
         &self,
         _request: &ListWindowsRequest,
     ) -> Result<Vec<PlatformWindow>, PlatformError> {
+        self.list_windows_calls.fetch_add(1, Ordering::Relaxed);
         let windows = self
             .windows
             .lock()
             .map_err(|_| PlatformError::new(crate::platform::PlatformErrorCode::Internal, "lock"))?;
         Ok(windows
             .iter()
-            .filter(|(_, window)| !window.closed)
+            .filter(|(_, window)| !window.closed && !window.hidden_from_enum)
             .map(|(id, window)| PlatformWindow {
                 native_window_id: id.clone(),
                 process_id: Some(window.process_id),
@@ -230,6 +262,14 @@ impl PlatformAdapter for MockPlatformAdapter {
                 process_path: window.process_path.clone(),
             })
             .collect())
+    }
+
+    fn window_is_open(&self, native_window_id: &str) -> bool {
+        self.windows
+            .lock()
+            .ok()
+            .and_then(|windows| windows.get(native_window_id).map(|window| !window.closed))
+            .unwrap_or(false)
     }
 
     fn focus_window(&self, request: &FocusWindowRequest) -> Result<FocusWindowResult, PlatformError> {
@@ -326,6 +366,18 @@ mod tests {
             })
             .unwrap();
         assert_eq!(lnk.app_type, "shortcut");
+    }
+
+    #[test]
+    fn window_is_open_follows_mock_list() {
+        let adapter = MockPlatformAdapter::new();
+        let id = adapter.open_window("Notepad", r"C:\Windows\System32\notepad.exe");
+        assert!(adapter.window_is_open(&id));
+        adapter.omit_from_enum(&id);
+        assert!(adapter.window_is_open(&id));
+        adapter.close_window(&id);
+        assert!(!adapter.window_is_open(&id));
+        assert!(!adapter.window_is_open("mock:missing"));
     }
 
     #[test]

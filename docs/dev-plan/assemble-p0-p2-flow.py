@@ -16,6 +16,7 @@ package_ids = [
     "pkg-17-collaboration",
     "pkg-18-plugin-marketplace",
     "pkg-19-preview-mode",
+    "pkg-20-window-liveness",
 ]
 
 packages = [json.loads((root / "packages" / pkg_id / "pkg.json").read_text(encoding="utf-8")) for pkg_id in package_ids]
@@ -34,6 +35,7 @@ flow = {
     "relatedSpecs": [
         "docs/product/workspace-manager-prd.md",
         "docs/product/workspace-preview-mode.md",
+        "docs/product/window-liveness.md",
         "docs/process/project-development-plan.md",
         "docs/specs/engineering-standards-and-tech-stack.md",
         "docs/specs/data-model-and-storage-spec.md",
@@ -46,7 +48,7 @@ flow = {
         "skipP1": True,
         "skipP1Note": "用户要求先做完剩余 P0，然后直接做 P2。窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、安装包先不做。",
         "remainingP0": "completed",
-        "remainingP0Note": "pkg-07 至 pkg-12 已完成。pkg-19 预览模式已完成。不要实现 pkg-13 至 pkg-18。",
+        "remainingP0Note": "pkg-07 至 pkg-12 已完成。pkg-19 预览模式与 pkg-20 窗口存活已完成。不要实现 pkg-13 至 pkg-18。",
         "nextPackage": "pkg-13-activity-observe",
         "defaultShortcut": "Control+KeyO",
         "shortcutMustBeConfigurable": True,
@@ -69,6 +71,7 @@ flow = {
         "macOS 真实扫描、启动、聚焦",
         "可选的 Windows 窗口内嵌实验",
         "工作区预览模式：应用栏一键预览，中间栏主体铺满一个可操作窗口",
+        "已绑定窗口关闭后及时对账，不移出工作区软件",
         "可选的窗口标题活动观察",
         "画布手动 AI 总结",
         "基于画布的费曼学习 Agent",
@@ -80,6 +83,7 @@ flow = {
         "P1：窗口截图预览、工作区别名编辑页、待办卡片、操作时间线手写增强、文件夹/URL/命令、工作区完整设置、白板导出单独产品化、Windows 安装包/签名/自动更新",
         "默认强制内嵌全部软件",
         "键盘钩子、剪贴板常驻、后台截屏、读取外部软件内部内容",
+        "把已打开的 Chromium/Electron 窗口 SetParent 进工作台操作",
         "自建云账号与实时 CRDT 同步",
         "在线插件商店、付费、远程安装",
         "Linux 平台适配",
@@ -91,6 +95,7 @@ flow = {
             {"id": "wave-p2-a", "packages": ["pkg-10-multi-window", "pkg-11-macos-platform", "pkg-14-ai-canvas-summary", "pkg-16-device-sync", "pkg-18-plugin-marketplace"]},
             {"id": "wave-p2-b", "packages": ["pkg-12-window-embed", "pkg-13-activity-observe", "pkg-15-feynman-agent", "pkg-17-collaboration"]},
             {"id": "wave-p2-preview", "packages": ["pkg-19-preview-mode"]},
+            {"id": "wave-p2-liveness", "packages": ["pkg-20-window-liveness"]},
         ],
         "onePackageAtATimeForSingleAgent": True,
         "doNotExpandScope": True,

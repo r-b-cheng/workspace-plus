@@ -11,7 +11,7 @@
 - 已完成竖切：[`development-flow.json`](./development-flow.json)  
   pkg-01 到 pkg-06，状态 `completed`。
 - 当前总控：[`p0-p2-flow.json`](./p0-p2-flow.json)  
-  P0 剩余项与 pkg-10 / 11 / 12 已完成。用户要求跳过 pkg-13 至 pkg-18。当前包是 [pkg-19 预览模式](./packages/pkg-19-preview-mode/)。本轮按用户决定跳过 P1。
+  P0 剩余项与 pkg-10 / 11 / 12 / 19 / 20 已完成。用户要求跳过 pkg-13 至 pkg-18。本轮按用户决定跳过 P1。
 - 分包：[`packages/<pkg-id>/`](./packages/)  
   每个包自己的文件夹，里面是 `pkg.json` 和 `README.md`。
 
@@ -28,6 +28,7 @@
 | [pkg-11](./packages/pkg-11-macos-platform/) | macOS 真实平台 | P2 | 09，可与 10 并行 |
 | [pkg-12](./packages/pkg-12-window-embed/) | 可选窗口内嵌（实验） | P2 | 10 |
 | [pkg-19](./packages/pkg-19-preview-mode/) | 工作区预览模式 | P2 | 12 |
+| [pkg-20](./packages/pkg-20-window-liveness/) | 窗口关闭及时对账 | P2 | 10 |
 | [pkg-13](./packages/pkg-13-activity-observe/) | 可选窗口活动观察 | P2 | 10 |
 | [pkg-14](./packages/pkg-14-ai-canvas-summary/) | 画布手动 AI 总结 | P2 | 09 |
 | [pkg-15](./packages/pkg-15-feynman-agent/) | 费曼学习 Agent | P2 | 14 |
@@ -35,7 +36,7 @@
 | [pkg-17](./packages/pkg-17-collaboration/) | 只读分享与评论 | P2 | 16 |
 | [pkg-18](./packages/pkg-18-plugin-marketplace/) | 本机插件加载 | P2 | 09 |
 
-P0 剩余项（07 / 08 / 09）与 pkg-10 / 11 / 12 已完成。按用户决定跳过 pkg-13 至 pkg-18。当前包是 `pkg-19`。一次只做一个包。
+P0 剩余项（07 / 08 / 09）与 pkg-10 / 11 / 12 / 19 / 20 已完成。按用户决定跳过 pkg-13 至 pkg-18。一次只做一个包。
 
 ## 这一轮做什么、不做什么
 

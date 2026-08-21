@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tempfile::TempDir;
 use workspace_hub_lib::domain::CanvasNodeInput;
-use workspace_hub_lib::platform::{FocusWindowRequest, PlatformAdapter};
+use workspace_hub_lib::platform::{FocusWindowRequest, ListWindowsRequest, PlatformAdapter};
 use workspace_hub_lib::storage::{apply_migrations, open_database, reapply_migration_sql};
 use workspace_hub_lib::{AppService, MockPlatformAdapter};
 
@@ -1085,6 +1085,613 @@ fn remove_workspace_app_clears_embed_flag() {
         .launch_workspace_app(&workspace.id, &notepad.id)
         .unwrap();
     assert!(!rebound.embed_enabled);
+}
+
+#[test]
+fn bound_window_gone_marks_last_window_closed_without_listing() {
+    let env = setup();
+    let sink = std::sync::Arc::new(workspace_hub_lib::CapturingWindowChangeSink::new());
+    env.service.set_window_change_sink(sink.clone());
+    let workspace = env
+        .service
+        .create_workspace("存活-最后一扇", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.adapter.close_window(&first_external);
+
+    let changed = env
+        .service
+        .handle_bound_window_gone(&first_external)
+        .unwrap();
+    assert!(changed);
+
+    let apps = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(apps.len(), 1);
+    assert_eq!(apps[0].id, launched.id);
+    assert_eq!(apps[0].status, "closed");
+
+    let events = sink.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].workspace_id, workspace.id);
+    assert_eq!(events[0].workspace_app_id.as_deref(), Some(launched.id.as_str()));
+    assert_eq!(events[0].preview_released, None);
+    assert_eq!(events[0].preview_seq, None);
+    let json = serde_json::to_string(&events[0]).unwrap();
+    assert!(json.contains("workspaceId"));
+    assert!(!json.contains("previewSeq"));
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+    assert!(!json.contains("externalWindowId"));
+    assert!(!json.contains("external_window_id"));
+    assert!(!json.contains("EVENT_OBJECT"));
+}
+
+#[test]
+fn bound_window_gone_keeps_sibling_running() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("存活-兄弟窗口", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let chrome_exe = r"C:\Program Files\Google\Chrome\Application\chrome.exe";
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.adapter.open_window("Inbox - Google Chrome", chrome_exe);
+    env.service
+        .list_workspace_app_windows(&launched.id)
+        .unwrap();
+    env.adapter.close_window(&first_external);
+
+    let changed = env
+        .service
+        .handle_bound_window_gone(&first_external)
+        .unwrap();
+    assert!(changed);
+
+    let apps = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(apps.len(), 1);
+    assert_eq!(apps[0].status, "running");
+
+    let windows = env
+        .service
+        .list_workspace_app_windows(&launched.id)
+        .unwrap();
+    assert_eq!(
+        windows.iter().filter(|item| item.status == "running").count(),
+        1
+    );
+    assert_eq!(
+        windows.iter().filter(|item| item.status == "closed").count(),
+        1
+    );
+}
+
+#[test]
+fn bound_window_gone_ignores_unbound_id() {
+    let env = setup();
+    let sink = std::sync::Arc::new(workspace_hub_lib::CapturingWindowChangeSink::new());
+    env.service.set_window_change_sink(sink.clone());
+    let workspace = env
+        .service
+        .create_workspace("存活-未绑定", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+
+    let changed = env
+        .service
+        .handle_bound_window_gone("mock:not-bound")
+        .unwrap();
+    assert!(!changed);
+    assert!(sink.events().is_empty());
+    let apps = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(apps[0].id, launched.id);
+    assert_eq!(apps[0].status, "running");
+}
+
+#[test]
+fn process_exit_closes_all_running_windows_for_pid() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("存活-进程退出", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let chrome_exe = r"C:\Program Files\Google\Chrome\Application\chrome.exe";
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    let pid = env.adapter.window_process_id(&first_external).expect("pid");
+    env.adapter
+        .open_window_with_pid("Docs - Google Chrome", chrome_exe, pid);
+    env.service
+        .list_workspace_app_windows(&launched.id)
+        .unwrap();
+
+    let changed = env.service.handle_process_exited(pid).unwrap();
+    assert!(changed);
+
+    let apps = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(apps[0].status, "closed");
+    assert_eq!(apps.len(), 1);
+}
+
+#[test]
+fn watchdog_reconciles_closed_window_on_active_workspace_only() {
+    let env = setup();
+    let sink = std::sync::Arc::new(workspace_hub_lib::CapturingWindowChangeSink::new());
+    env.service.set_window_change_sink(sink.clone());
+    let active = env
+        .service
+        .create_workspace("存活-看门狗-当前", None, None, None)
+        .unwrap();
+    let other = env
+        .service
+        .create_workspace("存活-看门狗-其他", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+
+    env.service.set_active_workspace(&other.id).unwrap();
+    let other_app = env
+        .service
+        .launch_workspace_app(&other.id, &chrome.id)
+        .unwrap();
+    let other_external = other_app.native_window_id.clone().expect("mock window");
+
+    env.service.set_active_workspace(&active.id).unwrap();
+    let active_app = env
+        .service
+        .launch_workspace_app(&active.id, &notepad.id)
+        .unwrap();
+    let active_external = active_app.native_window_id.clone().expect("mock window");
+
+    env.adapter.close_window(&active_external);
+    env.adapter.close_window(&other_external);
+
+    let changed = env
+        .service
+        .watchdog_reconcile_active_workspace()
+        .unwrap();
+    assert!(changed);
+    let active_apps = env.service.list_workspace_apps(&active.id).unwrap();
+    assert_eq!(active_apps[0].status, "closed");
+    let other_apps = env.service.list_workspace_apps(&other.id).unwrap();
+    assert_eq!(other_apps[0].status, "running");
+
+    let unchanged = env
+        .service
+        .watchdog_reconcile_active_workspace()
+        .unwrap();
+    assert!(!unchanged);
+}
+
+#[test]
+fn watchdog_lists_desktop_once_per_tick() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("存活-看门狗-一次枚举", None, None, None)
+        .unwrap();
+    env.service.set_active_workspace(&workspace.id).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    env.service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    env.service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+
+    let before = env.adapter.list_windows_call_count();
+    env.service
+        .watchdog_reconcile_active_workspace()
+        .unwrap();
+    assert_eq!(env.adapter.list_windows_call_count() - before, 1);
+}
+
+#[test]
+fn gone_embedded_window_releases_embed_session() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("存活-预览释放", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.service
+        .test_force_embed_session_for_window(&workspace.id, &launched.id, &first_external)
+        .unwrap();
+    assert!(env.service.test_has_embed_session());
+    env.adapter.close_window(&first_external);
+
+    env.service
+        .handle_bound_window_gone(&first_external)
+        .unwrap();
+    assert!(!env.service.test_has_embed_session());
+}
+
+#[test]
+fn release_embed_if_opaque_matches_ignores_replaced_session() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("存活-旧句柄不拆新预览", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let old_opaque = launched.native_window_id.clone().expect("mock window");
+
+    env.service
+        .test_force_embed_session_for_window(&workspace.id, &launched.id, &old_opaque)
+        .unwrap();
+    env.service
+        .test_force_embed_session_seq(&workspace.id, &launched.id, 2)
+        .unwrap();
+    assert!(env.service.test_has_embed_session());
+    assert_eq!(env.service.test_embed_session_preview_seq(), Some(2));
+
+    let (released, preview_seq) = env.service.test_release_embed_if_opaque_matches(&old_opaque);
+    assert!(!released);
+    assert!(preview_seq.is_none());
+    assert!(env.service.test_has_embed_session());
+    assert_eq!(env.service.test_embed_session_preview_seq(), Some(2));
+
+    let (released, preview_seq) = env
+        .service
+        .test_release_embed_if_opaque_matches("mock:embed-session");
+    assert!(released);
+    assert_eq!(preview_seq, Some(2));
+    assert!(!env.service.test_has_embed_session());
+}
+
+#[test]
+fn gone_embedded_window_emits_preview_released() {
+    let env = setup();
+    let sink = std::sync::Arc::new(workspace_hub_lib::CapturingWindowChangeSink::new());
+    env.service.set_window_change_sink(sink.clone());
+    let workspace = env
+        .service
+        .create_workspace("存活-预览释放事件", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.service
+        .test_force_embed_session_for_window(&workspace.id, &launched.id, &first_external)
+        .unwrap();
+
+    env.service
+        .handle_bound_window_gone(&first_external)
+        .unwrap();
+
+    let events = sink.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].preview_released, Some(true));
+    assert_eq!(events[0].preview_seq, Some(1));
+    let json = serde_json::to_string(&events[0]).unwrap();
+    assert!(json.contains("previewReleased"));
+    assert!(json.contains("previewSeq"));
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+}
+
+#[test]
+fn watchdog_does_not_close_embedded_window_missing_from_enum() {
+    let env = setup();
+    let sink = std::sync::Arc::new(workspace_hub_lib::CapturingWindowChangeSink::new());
+    env.service.set_window_change_sink(sink.clone());
+    let workspace = env
+        .service
+        .create_workspace("存活-预览不假关", None, None, None)
+        .unwrap();
+    env.service.set_active_workspace(&workspace.id).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.service
+        .test_force_embed_session_for_window(&workspace.id, &launched.id, &first_external)
+        .unwrap();
+    env.adapter.omit_from_enum(&first_external);
+
+    let changed = env
+        .service
+        .watchdog_reconcile_active_workspace()
+        .unwrap();
+    assert!(!changed);
+    assert!(env.service.test_has_embed_session());
+
+    let apps = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(apps[0].status, "running");
+    assert!(sink.events().is_empty());
+}
+
+#[test]
+fn watchdog_closes_embedded_window_when_iswindow_false() {
+    let env = setup();
+    let sink = std::sync::Arc::new(workspace_hub_lib::CapturingWindowChangeSink::new());
+    env.service.set_window_change_sink(sink.clone());
+    let workspace = env
+        .service
+        .create_workspace("存活-预览已关", None, None, None)
+        .unwrap();
+    env.service.set_active_workspace(&workspace.id).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.service
+        .test_force_embed_session_for_window(&workspace.id, &launched.id, &first_external)
+        .unwrap();
+    env.adapter.close_window(&first_external);
+    assert!(!env.adapter.window_is_open(&first_external));
+
+    let changed = env
+        .service
+        .watchdog_reconcile_active_workspace()
+        .unwrap();
+    assert!(changed);
+    assert!(!env.service.test_has_embed_session());
+
+    let apps = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(apps[0].status, "closed");
+    let events = sink.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].preview_released, Some(true));
+    assert_eq!(events[0].preview_seq, Some(1));
+    let json = serde_json::to_string(&events[0]).unwrap();
+    assert!(json.contains("previewReleased"));
+    assert!(json.contains("previewSeq"));
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+}
+
+#[test]
+fn watchdog_releases_leftover_embed_when_row_already_closed() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("存活-预览残留会话", None, None, None)
+        .unwrap();
+    env.service.set_active_workspace(&workspace.id).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.adapter.close_window(&first_external);
+    env.service
+        .handle_bound_window_gone(&first_external)
+        .unwrap();
+    assert!(!env.adapter.window_is_open(&first_external));
+
+    let sink = std::sync::Arc::new(workspace_hub_lib::CapturingWindowChangeSink::new());
+    env.service.set_window_change_sink(sink.clone());
+    env.service
+        .test_force_embed_session_for_window(&workspace.id, &launched.id, &first_external)
+        .unwrap();
+    assert!(env.service.test_has_embed_session());
+
+    let changed = env
+        .service
+        .watchdog_reconcile_active_workspace()
+        .unwrap();
+    assert!(changed);
+    assert!(!env.service.test_has_embed_session());
+
+    let events = sink.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].workspace_id, workspace.id);
+    assert_eq!(events[0].workspace_app_id.as_deref(), Some(launched.id.as_str()));
+    assert_eq!(events[0].preview_released, Some(true));
+    assert_eq!(events[0].preview_seq, Some(1));
+    let json = serde_json::to_string(&events[0]).unwrap();
+    assert!(json.contains("previewReleased"));
+    assert!(json.contains("previewSeq"));
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+}
+
+#[test]
+fn watchdog_recovers_window_closed_after_window_returns() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("存活-看门狗-恢复", None, None, None)
+        .unwrap();
+    env.service.set_active_workspace(&workspace.id).unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    env.adapter.close_window(&first_external);
+    env.service
+        .handle_bound_window_gone(&first_external)
+        .unwrap();
+    let closed = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(closed[0].status, "closed");
+
+    env.adapter
+        .open_window("Notepad", r"C:\Windows\System32\notepad.exe");
+    let recovered = env
+        .service
+        .watchdog_reconcile_active_workspace()
+        .unwrap();
+    assert!(recovered);
+    let apps = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(apps[0].status, "running");
+}
+
+#[test]
+fn stale_enum_does_not_resurrect_closed_window() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("存活-陈旧枚举", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let first_external = launched.native_window_id.clone().expect("mock window");
+    let stale = env
+        .adapter
+        .list_windows(&ListWindowsRequest::default())
+        .unwrap();
+    assert!(stale
+        .iter()
+        .any(|window| window.native_window_id == first_external));
+
+    env.adapter.close_window(&first_external);
+    env.service
+        .handle_bound_window_gone(&first_external)
+        .unwrap();
+
+    env.service
+        .test_sync_workspace_app_windows_from_desktop(&launched.id, &stale)
+        .unwrap();
+
+    let apps = env.service.list_workspace_apps(&workspace.id).unwrap();
+    assert_eq!(apps[0].status, "closed");
 }
 
 fn base64_png() -> String {

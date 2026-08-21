@@ -58,6 +58,13 @@ pub fn focus_window(native_window_id: &str) -> Result<FocusWindowResult, Platfor
     ))
 }
 
+pub fn window_is_open(native_window_id: &str) -> bool {
+    let Ok(hwnd) = hwnd_from_opaque_id(native_window_id) else {
+        return false;
+    };
+    unsafe { IsWindow(hwnd).as_bool() }
+}
+
 pub fn request_close_window(native_window_id: &str) -> bool {
     use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
     use windows::Win32::Foundation::{LPARAM, WPARAM};

@@ -828,6 +828,68 @@ pub fn native_window_find_by_external(
     Ok(row)
 }
 
+pub fn native_window_find_running_by_external(
+    conn: &Connection,
+    external_window_id: &str,
+) -> Result<Option<NativeWindowRow>, AppError> {
+    let row = conn
+        .query_row(
+            &format!(
+                "SELECT {NATIVE_WINDOW_ROW_COLUMNS}
+                 FROM native_windows
+                 WHERE external_window_id = ?1 AND deleted_at IS NULL AND status = 'running'
+                 ORDER BY updated_at DESC
+                 LIMIT 1"
+            ),
+            [external_window_id],
+            map_native_window_row,
+        )
+        .optional()?;
+    Ok(row)
+}
+
+pub fn native_window_list_running_by_pid(
+    conn: &Connection,
+    process_id: i64,
+) -> Result<Vec<NativeWindowRow>, AppError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {NATIVE_WINDOW_ROW_COLUMNS}
+         FROM native_windows
+         WHERE process_id = ?1 AND deleted_at IS NULL AND status = 'running'"
+    ))?;
+    let rows = stmt.query_map([process_id], map_native_window_row)?;
+    collect_rows(rows)
+}
+
+pub fn native_window_list_running_process_ids(conn: &Connection) -> Result<Vec<u32>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT process_id FROM native_windows
+         WHERE deleted_at IS NULL AND status = 'running' AND process_id IS NOT NULL",
+    )?;
+    let rows = stmt.query_map([], |row| row.get::<_, i64>(0))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let pid = row?;
+        if pid > 0 {
+            out.push(pid as u32);
+        }
+    }
+    Ok(out)
+}
+
+pub fn workspace_app_list_liveness_ids(
+    conn: &Connection,
+    workspace_id: &str,
+) -> Result<Vec<String>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id FROM workspace_apps
+         WHERE workspace_id = ?1 AND deleted_at IS NULL
+           AND status IN ('running', 'window_closed')",
+    )?;
+    let rows = stmt.query_map([workspace_id], |row| row.get(0))?;
+    collect_rows(rows)
+}
+
 pub fn native_window_list_rows(
     conn: &Connection,
     workspace_app_id: &str,

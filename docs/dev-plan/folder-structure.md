@@ -44,7 +44,7 @@ docs/dev-plan/
   README.md
   folder-structure.md
   development-flow.json          已完成的竖切
-  p0-p2-flow.json                当前总控：pkg-12 已完成，当前包 pkg-19 预览模式；跳过 pkg-13 至 18
+  p0-p2-flow.json                当前总控：pkg-19 已完成，当前包 pkg-20 窗口存活；跳过 pkg-13 至 18
   assemble-p0-p2-flow.py
   packages/
     pkg-01-engineering-foundation/

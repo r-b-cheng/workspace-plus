@@ -27,6 +27,12 @@ use crate::storage::{
     WorkspaceAppRow, ACTIVE_WORKSPACE_KEY, QUICK_SWITCH_SHORTCUT_KEY,
 };
 
+mod window_liveness;
+pub use window_liveness::{
+    start_window_liveness, CapturingWindowChangeSink, WindowChangeSink, WorkspaceWindowsChanged,
+    WORKSPACE_WINDOWS_CHANGED_EVENT,
+};
+
 const ALLOWED_NODE_TYPES: &[&str] = &[
     "markdown",
     "text",
@@ -71,6 +77,7 @@ pub struct AppService {
     shortcut_registration: Mutex<ShortcutRegistrationState>,
     embed_session: Mutex<Option<EmbedSession>>,
     embed_ops: Mutex<()>,
+    window_change_sink: Mutex<Option<Arc<dyn WindowChangeSink>>>,
 }
 
 impl AppService {
@@ -85,6 +92,7 @@ impl AppService {
             shortcut_registration: Mutex::new(ShortcutRegistrationState::default()),
             embed_session: Mutex::new(None),
             embed_ops: Mutex::new(()),
+            window_change_sink: Mutex::new(None),
         })
     }
 
@@ -587,10 +595,14 @@ impl AppService {
                     external_id,
                 )? {
                     storage::native_window_mark_closed(&conn, &closed_row.id, &now)?;
+                    window_liveness::note_bound_closed(external_id);
                 }
             } else if let Some(row) = storage::workspace_app_get(&conn, workspace_app_id)? {
                 if let Some(window_row_id) = row.last_window_id.as_deref() {
-                    storage::native_window_mark_closed(&conn, window_row_id, &now)?;
+                    if let Some(closed) = storage::native_window_get(&conn, window_row_id)? {
+                        storage::native_window_mark_closed(&conn, window_row_id, &now)?;
+                        window_liveness::note_bound_closed(&closed.external_window_id);
+                    }
                 }
             }
             if let Some(next_id) =
@@ -642,6 +654,7 @@ impl AppService {
                 let conn = self.lock_db()?;
                 let now = now_utc();
                 storage::native_window_mark_closed(&conn, &sibling.id, &now)?;
+                window_liveness::note_bound_closed(&sibling.external_window_id);
                 if let Some(next_id) =
                     storage::native_window_most_recent_running_id(&conn, workspace_app_id)?
                 {
@@ -677,6 +690,18 @@ impl AppService {
     }
 
     pub fn refresh_workspace_app_windows(&self, workspace_app_id: &str) -> Result<(), AppError> {
+        let desktop = match self.adapter.list_windows(&ListWindowsRequest::default()) {
+            Ok(windows) => windows,
+            Err(_) => return Ok(()),
+        };
+        self.sync_workspace_app_windows_from_desktop(workspace_app_id, &desktop)
+    }
+
+    pub(crate) fn sync_workspace_app_windows_from_desktop(
+        &self,
+        workspace_app_id: &str,
+        desktop: &[PlatformWindow],
+    ) -> Result<(), AppError> {
         let (workspace_id, installed_app, workspace_app, exclude_window_ids) = {
             let conn = self.lock_db()?;
             let row = storage::workspace_app_get(&conn, workspace_app_id)?
@@ -711,12 +736,10 @@ impl AppService {
             exclude_window_ids,
         };
 
-        let desktop = match self.adapter.list_windows(&ListWindowsRequest::default()) {
-            Ok(windows) => windows,
-            Err(_) => return Ok(()),
-        };
-        let matched: Vec<PlatformWindow> = list_matching_windows(&desktop, &hint)
+        let protect_opaque = self.embed_session_opaque_id();
+        let matched: Vec<PlatformWindow> = list_matching_windows(desktop, &hint)
             .into_iter()
+            .filter(|window| self.adapter.window_is_open(&window.native_window_id))
             .cloned()
             .collect();
 
@@ -730,10 +753,36 @@ impl AppService {
             workspace_app.last_window_id.as_deref(),
             &workspace_app.status,
             &matched,
+            protect_opaque.as_deref(),
             &now_utc(),
         )?;
         tx.commit()?;
         Ok(())
+    }
+
+    fn embed_session_opaque_id(&self) -> Option<String> {
+        self.lock_embed().ok().and_then(|guard| {
+            guard
+                .as_ref()
+                .map(|session| session.opaque_window_id.clone())
+        })
+    }
+
+    fn embed_session_workspace_app_id(&self) -> Option<String> {
+        self.lock_embed().ok().and_then(|guard| {
+            guard
+                .as_ref()
+                .map(|session| session.workspace_app_id.clone())
+        })
+    }
+
+    #[doc(hidden)]
+    pub fn test_sync_workspace_app_windows_from_desktop(
+        &self,
+        workspace_app_id: &str,
+        desktop: &[PlatformWindow],
+    ) -> Result<(), AppError> {
+        self.sync_workspace_app_windows_from_desktop(workspace_app_id, desktop)
     }
 
     pub fn focus_native_window(&self, window_id: &str) -> Result<WorkspaceApp, AppError> {
@@ -780,6 +829,7 @@ impl AppService {
                 let tx = conn.transaction()?;
                 let now = now_utc();
                 storage::native_window_mark_closed(&tx, &row.id, &now)?;
+                window_liveness::note_bound_closed(&row.external_window_id);
                 let workspace_app = storage::workspace_app_get(&tx, &workspace_app_id)?
                     .ok_or_else(|| AppError::not_found("workspace app not found"))?;
                 if workspace_app.last_window_id.as_deref() == Some(row.id.as_str()) {
@@ -931,7 +981,7 @@ impl AppService {
 
         // Different target (or no session): release first so a failed second
         // embed cannot leave the previous window parented.
-        let _ = self.release_embedded_window_locked(None);
+        let _ = self.release_embedded_window_locked(None, None);
 
         #[cfg(not(windows))]
         {
@@ -988,26 +1038,39 @@ impl AppService {
         workspace_app_id: Option<&str>,
     ) -> Result<ReleaseEmbeddedWindowResult, AppError> {
         let _ops = self.lock_embed_ops()?;
-        self.release_embedded_window_locked(workspace_app_id)
+        Ok(ReleaseEmbeddedWindowResult {
+            released: self
+                .release_embedded_window_locked(workspace_app_id, None)?
+                .is_some(),
+        })
     }
 
+    /// Caller must hold `embed_ops`. Filters are AND-ed when both are `Some`.
     fn release_embedded_window_locked(
         &self,
         workspace_app_id: Option<&str>,
-    ) -> Result<ReleaseEmbeddedWindowResult, AppError> {
+        opaque_window_id: Option<&str>,
+    ) -> Result<Option<u64>, AppError> {
         let session = {
             let mut guard = self.lock_embed()?;
-            if let Some(filter) = workspace_app_id {
-                match guard.as_ref() {
-                    Some(session) if session.workspace_app_id == filter => {}
-                    _ => return Ok(ReleaseEmbeddedWindowResult { released: false }),
+            if let Some(session) = guard.as_ref() {
+                if let Some(filter) = workspace_app_id {
+                    if session.workspace_app_id != filter {
+                        return Ok(None);
+                    }
+                }
+                if let Some(filter) = opaque_window_id {
+                    if session.opaque_window_id != filter {
+                        return Ok(None);
+                    }
                 }
             }
             guard.take()
         };
         let Some(session) = session else {
-            return Ok(ReleaseEmbeddedWindowResult { released: false });
+            return Ok(None);
         };
+        let preview_seq = session.preview_seq;
 
         #[cfg(windows)]
         {
@@ -1024,7 +1087,7 @@ impl AppService {
             let _ = session;
         }
 
-        Ok(ReleaseEmbeddedWindowResult { released: true })
+        Ok(Some(preview_seq))
     }
 
     fn embedded_workspace_app_id(&self) -> Result<Option<String>, AppError> {
@@ -1079,11 +1142,21 @@ impl AppService {
         workspace_id: &str,
         workspace_app_id: &str,
     ) -> Result<(), AppError> {
+        self.test_force_embed_session_for_window(workspace_id, workspace_app_id, "mock:embed-session")
+    }
+
+    #[doc(hidden)]
+    pub fn test_force_embed_session_for_window(
+        &self,
+        workspace_id: &str,
+        workspace_app_id: &str,
+        opaque_window_id: &str,
+    ) -> Result<(), AppError> {
         let mut session = self.lock_embed()?;
         *session = Some(EmbedSession {
             workspace_id: workspace_id.to_string(),
             workspace_app_id: workspace_app_id.to_string(),
-            opaque_window_id: "mock:embed-session".into(),
+            opaque_window_id: opaque_window_id.to_string(),
             original_style: 0,
             original_ex_style: 0,
             original_parent: 0,
@@ -1136,7 +1209,7 @@ impl AppService {
             host_hwnd.unwrap_or(0),
             host_bounds.map(|bounds| (bounds.x, bounds.y, bounds.width, bounds.height)),
         ) {
-            let _ = self.release_embedded_window_locked(Some(workspace_app_id));
+            let _ = self.release_embedded_window_locked(Some(workspace_app_id), None);
             return Ok(Some(self.embed_fallback(workspace_app_id, reason)?));
         }
         Ok(Some(EmbedWorkspaceAppResult {
@@ -1568,6 +1641,10 @@ fn upsert_running_window(
             process_path,
             now,
         )?;
+        window_liveness::note_bound_running(native_window_id);
+        if let Some(pid) = process_id {
+            window_liveness::note_bound_process(pid as u32);
+        }
         return Ok(existing.id);
     }
 
@@ -1584,6 +1661,10 @@ fn upsert_running_window(
         title,
         now,
     )?;
+    window_liveness::note_bound_running(native_window_id);
+    if let Some(pid) = process_id {
+        window_liveness::note_bound_process(pid as u32);
+    }
     Ok(window_row_id)
 }
 
@@ -1618,9 +1699,13 @@ fn sync_workspace_app_windows(
     last_window_id: Option<&str>,
     current_status: &str,
     matched: &[PlatformWindow],
+    protect_opaque: Option<&str>,
     now: &str,
 ) -> Result<(), AppError> {
     let mut seen = HashSet::new();
+    if let Some(opaque) = protect_opaque {
+        seen.insert(opaque.to_string());
+    }
     for window in matched {
         seen.insert(window.native_window_id.clone());
         upsert_running_window(
@@ -1639,9 +1724,20 @@ fn sync_workspace_app_windows(
     for row in storage::native_window_list_rows(conn, workspace_app_id)? {
         if !seen.contains(&row.external_window_id) && row.status != "closed" {
             storage::native_window_mark_closed(conn, &row.id, now)?;
+            window_liveness::note_bound_closed(&row.external_window_id);
         }
     }
 
+    reconcile_workspace_app_window_status(conn, workspace_app_id, last_window_id, current_status, now)
+}
+
+fn reconcile_workspace_app_window_status(
+    conn: &Connection,
+    workspace_app_id: &str,
+    last_window_id: Option<&str>,
+    current_status: &str,
+    now: &str,
+) -> Result<(), AppError> {
     let last_running = match last_window_id {
         Some(id) => storage::native_window_is_running(conn, id)?,
         None => false,
