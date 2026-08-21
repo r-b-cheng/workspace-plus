@@ -153,6 +153,7 @@ pub async fn embed_workspace_app_window(
     handle: AppHandle,
     workspace_app_id: String,
     host_bounds: Option<HostBounds>,
+    preview_seq: Option<u64>,
 ) -> Result<EmbedWorkspaceAppResult, AppError> {
     if workspace_app_id.trim().is_empty() {
         return Err(AppError::validation("workspaceAppId is required"));
@@ -163,6 +164,7 @@ pub async fn embed_workspace_app_window(
             &workspace_app_id,
             host_bounds,
             host_hwnd,
+            preview_seq,
         )
     })
     .await
@@ -171,8 +173,14 @@ pub async fn embed_workspace_app_window(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn release_embedded_window(
     handle: AppHandle,
+    workspace_app_id: Option<String>,
 ) -> Result<ReleaseEmbeddedWindowResult, AppError> {
-    super::run_blocking(move || handle.state::<AppService>().release_embedded_window()).await
+    super::run_blocking(move || {
+        handle
+            .state::<AppService>()
+            .release_embedded_window_for(workspace_app_id.as_deref())
+    })
+    .await
 }
 
 fn main_window_host(handle: &AppHandle) -> Option<isize> {

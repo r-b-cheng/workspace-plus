@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { appApi } from '@/features/api/app-api';
 import { windowApi } from '@/features/api/window-api';
 import { AppApiError } from '@/features/api/tauri-client';
-import { queryEmbedHostBounds } from '@/features/windows/embed-host';
+import { queryEmbedHostBounds, waitForEmbedHostBounds } from '@/features/windows/embed-host';
 import { canFocusWorkspaceApp, statusFromErrorCode } from '@/features/windows/window-status';
 import { ERROR_CODES, userMessageForError } from '@/lib/errors';
 import type {
@@ -119,6 +119,7 @@ export const initialWorkspaceAppStoreData: WorkspaceAppStoreData = {
 };
 
 let workspaceAppsRequestSeq = 0;
+let embedPreviewSeq = 0;
 
 export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
   ...initialWorkspaceAppStoreData,
@@ -127,6 +128,7 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
     const seq = ++workspaceAppsRequestSeq;
     const sameWorkspace = get().currentWorkspaceId === workspaceId;
     if (!sameWorkspace) {
+      embedPreviewSeq += 1;
       if (get().embeddedWorkspaceAppId || get().pendingEmbedWorkspaceAppId) {
         await get().releaseEmbeddedWindow();
       }
@@ -593,6 +595,57 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
 
   async embedWorkspaceAppWindow(workspaceAppId, hostBounds) {
     const startedWorkspaceId = get().currentWorkspaceId;
+    const alreadyEmbedded =
+      get().embeddedWorkspaceAppId === workspaceAppId && get().pendingEmbedWorkspaceAppId === null;
+
+    if (alreadyEmbedded) {
+      const seq = embedPreviewSeq;
+      const bounds = hostBounds ?? queryEmbedHostBounds();
+      try {
+        const result = await appApi.embedWorkspaceAppWindow({
+          workspaceAppId,
+          hostBounds: bounds,
+          previewSeq: seq,
+        });
+        if (seq !== embedPreviewSeq) {
+          if (result.embedded) {
+            await appApi.releaseEmbeddedWindow({ workspaceAppId });
+          }
+          return result;
+        }
+        const stillThisPreview = get().embeddedWorkspaceAppId === workspaceAppId;
+        if (!stillThisPreview) {
+          if (result.embedded) {
+            await appApi.releaseEmbeddedWindow({ workspaceAppId });
+          }
+          return result;
+        }
+        if (!result.embedded) {
+          set({
+            pendingEmbedWorkspaceAppId: null,
+            embeddedWorkspaceAppId: null,
+            appError: result.reason
+              ? { code: ERROR_CODES.VALIDATION, message: result.reason }
+              : null,
+          });
+        }
+        return result;
+      } catch (error) {
+        if (seq !== embedPreviewSeq) {
+          return null;
+        }
+        if (get().embeddedWorkspaceAppId === workspaceAppId) {
+          set({
+            pendingEmbedWorkspaceAppId: null,
+            embeddedWorkspaceAppId: null,
+            appError: toRawCommandError(error),
+          });
+        }
+        return null;
+      }
+    }
+
+    const seq = ++embedPreviewSeq;
     set({
       pendingWorkspaceAppIds: uniqueIds(get().pendingWorkspaceAppIds, workspaceAppId),
       pendingEmbedWorkspaceAppId: workspaceAppId,
@@ -601,20 +654,20 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
 
     let bounds = hostBounds;
     if (!bounds && typeof window !== 'undefined') {
-      await new Promise<void>((resolve) => {
-        if (typeof requestAnimationFrame === 'function') {
-          requestAnimationFrame(() => resolve());
-        } else {
-          resolve();
-        }
+      bounds = await waitForEmbedHostBounds();
+    }
+    if (seq !== embedPreviewSeq) {
+      set({
+        pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
       });
-      bounds = queryEmbedHostBounds();
+      return null;
     }
 
     try {
       const result = await appApi.embedWorkspaceAppWindow({
         workspaceAppId,
         hostBounds: bounds,
+        previewSeq: seq,
       });
       const workspaceId = result.workspaceApp.workspaceId;
       const stillCurrent = get().currentWorkspaceId === workspaceId;
@@ -624,41 +677,50 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
           : (get().workspaceAppsByWorkspaceId[workspaceId] ?? []),
         result.workspaceApp,
       );
-      if (!stillCurrent && result.embedded) {
-        await appApi.releaseEmbeddedWindow();
+      if (seq !== embedPreviewSeq) {
+        if (result.embedded) {
+          await appApi.releaseEmbeddedWindow({ workspaceAppId });
+        }
+        set({
+          workspaceApps: stillCurrent ? cached : get().workspaceApps,
+          workspaceAppsByWorkspaceId: {
+            ...get().workspaceAppsByWorkspaceId,
+            [workspaceId]: cached,
+          },
+          pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
+        });
+        return result;
       }
       set({
-        workspaceApps: stillCurrent ? cached : get().workspaceApps,
+        workspaceApps: cached,
         workspaceAppsByWorkspaceId: {
           ...get().workspaceAppsByWorkspaceId,
           [workspaceId]: cached,
         },
         pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
-        pendingEmbedWorkspaceAppId:
-          stillCurrent && result.embedded ? workspaceAppId : stillCurrent ? null : get().pendingEmbedWorkspaceAppId,
-        embeddedWorkspaceAppId:
-          stillCurrent && result.embedded ? workspaceAppId : stillCurrent ? null : get().embeddedWorkspaceAppId,
-        appError:
-          stillCurrent && result.reason
-            ? { code: ERROR_CODES.VALIDATION, message: result.reason }
-            : stillCurrent
-              ? null
-              : get().appError,
+        pendingEmbedWorkspaceAppId: null,
+        embeddedWorkspaceAppId: result.embedded ? workspaceAppId : null,
+        appError: result.reason ? { code: ERROR_CODES.VALIDATION, message: result.reason } : null,
       });
       return result;
     } catch (error) {
-      const stillCurrent = get().currentWorkspaceId === startedWorkspaceId;
       set({
         pendingWorkspaceAppIds: withoutId(get().pendingWorkspaceAppIds, workspaceAppId),
-        pendingEmbedWorkspaceAppId: stillCurrent ? null : get().pendingEmbedWorkspaceAppId,
-        embeddedWorkspaceAppId: stillCurrent ? null : get().embeddedWorkspaceAppId,
-        appError: stillCurrent ? toRawCommandError(error) : get().appError,
+      });
+      if (seq !== embedPreviewSeq) {
+        return null;
+      }
+      set({
+        pendingEmbedWorkspaceAppId: null,
+        embeddedWorkspaceAppId: null,
+        appError: toRawCommandError(error),
       });
       return null;
     }
   },
 
   async releaseEmbeddedWindow() {
+    embedPreviewSeq += 1;
     const embeddedWorkspaceAppId = get().embeddedWorkspaceAppId;
     try {
       await appApi.releaseEmbeddedWindow();
@@ -676,6 +738,7 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
 
   clearWorkspaceApps() {
     workspaceAppsRequestSeq += 1;
+    embedPreviewSeq += 1;
     if (get().embeddedWorkspaceAppId || get().pendingEmbedWorkspaceAppId) {
       void get().releaseEmbeddedWindow();
     }
@@ -698,6 +761,7 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
 
   reset() {
     workspaceAppsRequestSeq += 1;
+    embedPreviewSeq += 1;
     set({ ...initialWorkspaceAppStoreData });
   },
 }));

@@ -62,6 +62,8 @@ export type WorkspaceApp = {
   embedEnabled?: boolean;
 };
 
+export type WorkspaceView = 'dispatcher' | 'preview';
+
 export type HostBounds = {
   x: number;
   y: number;
@@ -80,6 +82,10 @@ export type ReleaseEmbeddedWindowResult = {
   released: boolean;
 };
 
+export type ReleaseEmbeddedWindowInput = {
+  workspaceAppId?: string;
+};
+
 export type SetWorkspaceAppEmbedInput = {
   workspaceAppId: string;
   embedEnabled: boolean;
@@ -88,6 +94,7 @@ export type SetWorkspaceAppEmbedInput = {
 export type EmbedWorkspaceAppWindowInput = {
   workspaceAppId: string;
   hostBounds?: HostBounds;
+  previewSeq?: number;
 };
 
 export type CanvasNodeType =

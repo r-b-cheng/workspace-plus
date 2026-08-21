@@ -1,0 +1,123 @@
+{
+  "id": "pkg-19-preview-mode",
+  "seq": 19,
+  "title": "工作区预览模式",
+  "status": "completed",
+  "dependsOn": [
+    "pkg-12-window-embed"
+  ],
+  "parallelWith": [],
+  "ownerHint": "前端工作区智能体 / 平台适配智能体",
+  "goal": "把包 12 的残缺内嵌实验收成中间栏的预览模式：顶栏和应用栏保留，主体铺满一个可操作窗口。点标签默认仍切系统窗口。预览从应用栏一键进入，不再走卡片勾选。",
+  "changeScope": {
+    "summary": "调度台与预览两种中间栏模式。预览入口改到运行中标签。宿主铺满应用栏以下剩余高度并对齐原生窗口。embed 不再要求 persist 开关。",
+    "allowedPaths": [
+      "src/app/workspace-shell.tsx",
+      "src/features/apps/**",
+      "src/features/windows/**",
+      "src/features/api/**",
+      "src/lib/types.ts",
+      "src/test/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/platform/windows/**",
+      "src-tauri/src/domain/**",
+      "src-tauri/tests/**",
+      "docs/dev-plan/packages/pkg-19-preview-mode/**",
+      "docs/product/workspace-preview-mode.md"
+    ],
+    "forbiddenPaths": [
+      "src/features/agent/**",
+      "src/features/canvas/components/**",
+      "src/features/quick-switch/**",
+      "src-tauri/src/platform/macos/**",
+      "src-tauri/migrations/**"
+    ],
+    "allowedChanges": [
+      "中间栏增加 dispatcher | preview 两种主体",
+      "运行中标签上提供预览 / 退出，点标签主体仍 activate",
+      "预览时隐藏概览和卡片，宿主 flex-1 铺满剩余高度",
+      "卡片去掉 embed 勾选和预览按钮",
+      "embed_workspace_app_window 不再要求 embedEnabled",
+      "已嵌入时按宿主表面更新 bounds，避免先释放再嵌套",
+      "失败回退聚焦并回到调度台",
+      "改 Vitest / Rust 测试匹配新交互"
+    ],
+    "forbiddenChanges": [
+      "点标签默认进入预览",
+      "预览里同时嵌多个窗口",
+      "默认给所有软件自动预览",
+      "把 HWND 暴露给前端业务层",
+      "macOS 内嵌",
+      "改快速切换面板语义",
+      "改白板节点编辑",
+      "实现 pkg-13 及之后的包"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d19-mode",
+      "name": "中间栏两种模式",
+      "description": "调度台显示概览和卡片；预览模式显示铺满的宿主。顶栏、应用栏、左侧工作区、右侧白板都保留。"
+    },
+    {
+      "id": "d19-entry",
+      "name": "应用栏一键预览",
+      "description": "运行中标签可直接预览。点名称仍聚焦系统窗口。卡片上不再有勾选开关。"
+    },
+    {
+      "id": "d19-host",
+      "name": "宿主对齐",
+      "description": "原生窗口与宿主表面重合；尺寸变化只 MoveWindow，不闪烁重嵌。"
+    },
+    {
+      "id": "d19-fallback",
+      "name": "失败回退",
+      "description": "嵌不进去就回调度台、给原因、聚焦真实窗口。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s19-01",
+      "title": "去掉 embedEnabled 门槛",
+      "status": "completed",
+      "doneWhen": "embed_workspace_app_window 不再因未开开关而 Validation；相关 Rust 测试改掉。"
+    },
+    {
+      "id": "s19-02",
+      "title": "应用栏入口与中间栏模式",
+      "status": "completed",
+      "doneWhen": "运行中标签有预览；预览时概览和卡片隐藏；宿主铺满剩余高度。"
+    },
+    {
+      "id": "s19-03",
+      "title": "宿主 bounds 跟随布局",
+      "status": "completed",
+      "doneWhen": "已嵌入时布局变化只更新位置尺寸；坐标相对产品窗口客户区。"
+    },
+    {
+      "id": "s19-04",
+      "title": "测试",
+      "status": "completed",
+      "doneWhen": "Vitest 覆盖入口、模式切换、失败回调度台、工作区隔离；Rust 覆盖不再需要开关；卡片旧 testid 不再被断言。"
+    }
+  ],
+  "commands": [
+    "embed_workspace_app_window",
+    "release_embedded_window"
+  ],
+  "acceptance": [
+    "点标签 / 卡片默认仍切系统窗口",
+    "预览从运行中标签一键进入，无需勾选",
+    "预览时中间主体只有一个可操作窗口，且铺满应用栏以下",
+    "白板仍在右侧，顶栏和应用栏仍在",
+    "失败有原因并回退聚焦，不停留空预览",
+    "前端看不到 HWND"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-19-preview-mode/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-19-preview-mode/README.md",
+    "product": "docs/product/workspace-preview-mode.md",
+    "manualAcceptance": "docs/dev-plan/packages/pkg-19-preview-mode/windows-preview-mode-manual-acceptance.md"
+  }
+}

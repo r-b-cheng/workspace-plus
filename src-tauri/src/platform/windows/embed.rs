@@ -12,10 +12,11 @@ use windows::Win32::System::Threading::{
     GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClassNameW, GetClientRect, GetParent, GetWindow, GetWindowLongW, GetWindowThreadProcessId,
-    IsWindow, MoveWindow, SetParent, SetWindowLongW, SetWindowPos, ShowWindow, GW_OWNER,
-    GWL_EXSTYLE, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-    SWP_SHOWWINDOW, SW_SHOW, WS_CHILD, WS_POPUP,
+    GetClassNameW, GetClientRect, GetParent, GetWindow, GetWindowLongW, GetWindowRect,
+    GetWindowThreadProcessId, IsWindow, MoveWindow, SetParent, SetWindowLongW, SetWindowPos,
+    ShowWindow, GW_CHILD, GW_HWNDNEXT, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, SWP_FRAMECHANGED,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_SHOW, WS_CHILD,
+    WS_POPUP,
 };
 
 use super::window_ops::hwnd_from_opaque_id;
@@ -110,7 +111,7 @@ pub fn reparent_to_host(
             return Err("无法把窗口放到本产品客户区。".into());
         }
 
-        apply_host_bounds(hwnd, host, bounds);
+        apply_host_bounds(hwnd, host, bounds, true);
         let _ = SetWindowPos(
             hwnd,
             HWND::default(),
@@ -160,9 +161,42 @@ pub fn restore_embedded_window(info: &EmbedRestoreInfo) -> Result<(), String> {
     Ok(())
 }
 
-unsafe fn apply_host_bounds(hwnd: HWND, host: HWND, bounds: Option<(i32, i32, i32, i32)>) {
+pub fn update_embedded_bounds(
+    opaque_window_id: &str,
+    host_hwnd: isize,
+    bounds: Option<(i32, i32, i32, i32)>,
+) -> Result<(), String> {
+    if reject_reason_for_opaque_id(opaque_window_id).is_some() {
+        return Ok(());
+    }
+    if host_hwnd == 0 {
+        return Err("没有可用的宿主窗口，无法预览。".into());
+    }
+    let hwnd = hwnd_from_opaque_id(opaque_window_id)
+        .map_err(|_| "窗口已关闭或无效，无法预览。".to_string())?;
+    unsafe {
+        if !IsWindow(hwnd).as_bool() {
+            return Err("窗口已关闭或无效，无法预览。".into());
+        }
+        let host = HWND(host_hwnd as *mut core::ffi::c_void);
+        apply_host_bounds(hwnd, host, bounds, true);
+    }
+    Ok(())
+}
+
+unsafe fn apply_host_bounds(
+    hwnd: HWND,
+    host: HWND,
+    bounds: Option<(i32, i32, i32, i32)>,
+    from_webview: bool,
+) {
     if let Some((x, y, width, height)) = bounds.filter(|item| item.2 > 0 && item.3 > 0) {
-        let _ = MoveWindow(hwnd, x, y, width, height, true);
+        let (ox, oy) = if from_webview {
+            webview_origin_in_host_client(host, hwnd)
+        } else {
+            (0, 0)
+        };
+        let _ = MoveWindow(hwnd, x + ox, y + oy, width, height, true);
         return;
     }
     let mut rect = RECT::default();
@@ -173,6 +207,42 @@ unsafe fn apply_host_bounds(hwnd: HWND, host: HWND, bounds: Option<(i32, i32, i3
             let _ = MoveWindow(hwnd, 0, 0, width, height, true);
         }
     }
+}
+
+unsafe fn webview_origin_in_host_client(host: HWND, embedded: HWND) -> (i32, i32) {
+    let Ok(mut cursor) = GetWindow(host, GW_CHILD) else {
+        return (0, 0);
+    };
+    if cursor.0.is_null() {
+        return (0, 0);
+    }
+    loop {
+        if cursor.0 != embedded.0 {
+            let mut child = RECT::default();
+            let mut host_window = RECT::default();
+            let mut host_client = RECT::default();
+            if GetWindowRect(cursor, &mut child).is_err()
+                || GetWindowRect(host, &mut host_window).is_err()
+                || GetClientRect(host, &mut host_client).is_err()
+            {
+                return (0, 0);
+            }
+            let frame_x =
+                (host_window.right - host_window.left) - (host_client.right - host_client.left);
+            let frame_y =
+                (host_window.bottom - host_window.top) - (host_client.bottom - host_client.top);
+            let border = frame_x / 2;
+            return (
+                child.left - host_window.left - border,
+                child.top - host_window.top - (frame_y - border),
+            );
+        }
+        match GetWindow(cursor, GW_HWNDNEXT) {
+            Ok(next) if !next.0.is_null() => cursor = next,
+            _ => break,
+        }
+    }
+    (0, 0)
 }
 
 unsafe fn window_class_name(hwnd: HWND) -> String {
@@ -243,6 +313,7 @@ mod tests {
         assert!(reject_reason_for_opaque_id("hwnd:1").is_some());
         assert!(reject_reason_for_opaque_id("win:").is_some());
         assert!(reject_reason_for_opaque_id("win:1").is_none());
+        assert!(update_embedded_bounds("mock:abc", 0, Some((8, 16, 320, 240))).is_ok());
     }
 
     #[test]

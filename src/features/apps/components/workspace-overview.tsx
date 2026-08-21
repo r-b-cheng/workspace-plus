@@ -29,6 +29,9 @@ export function WorkspaceOverview({ workspace, hasApps, loading = false, onAddAp
             <p className="m-0 text-muted-foreground">
               这里展示当前工作区的最近截图、软件快捷入口和状态摘要。点击软件后会请求切换到外部真实窗口，而不是在中间区域操作外部软件。
             </p>
+            <p className="mt-3 m-0 text-muted-foreground">
+              预览在应用栏，点「预览」后中间区域会变成该软件的窗口。点标签仍会切到系统窗口。
+            </p>
           </>
         ) : (
           <>

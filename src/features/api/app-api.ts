@@ -6,6 +6,7 @@ import type {
   InstalledApp,
   LaunchWorkspaceAppInput,
   ListInstalledAppsInput,
+  ReleaseEmbeddedWindowInput,
   ReleaseEmbeddedWindowResult,
   RemoveWorkspaceAppResult,
   SearchInstalledAppsInput,
@@ -96,11 +97,16 @@ export const appApi = {
     return callCommand<EmbedWorkspaceAppResult>('embed_workspace_app_window', {
       workspaceAppId: input.workspaceAppId,
       hostBounds: input.hostBounds,
+      previewSeq: input.previewSeq,
     });
   },
 
-  releaseEmbeddedWindow(): Promise<ReleaseEmbeddedWindowResult> {
-    return callCommand<ReleaseEmbeddedWindowResult>('release_embedded_window');
+  releaseEmbeddedWindow(
+    input: ReleaseEmbeddedWindowInput = {},
+  ): Promise<ReleaseEmbeddedWindowResult> {
+    return callCommand<ReleaseEmbeddedWindowResult>('release_embedded_window', {
+      workspaceAppId: input.workspaceAppId,
+    });
   },
 
   pickManualAppPath,

@@ -15,6 +15,7 @@ package_ids = [
     "pkg-16-device-sync",
     "pkg-17-collaboration",
     "pkg-18-plugin-marketplace",
+    "pkg-19-preview-mode",
 ]
 
 packages = [json.loads((root / "packages" / pkg_id / "pkg.json").read_text(encoding="utf-8")) for pkg_id in package_ids]
@@ -32,6 +33,7 @@ flow = {
     "previousPlan": "docs/dev-plan/development-flow.json",
     "relatedSpecs": [
         "docs/product/workspace-manager-prd.md",
+        "docs/product/workspace-preview-mode.md",
         "docs/process/project-development-plan.md",
         "docs/specs/engineering-standards-and-tech-stack.md",
         "docs/specs/data-model-and-storage-spec.md",
@@ -44,12 +46,14 @@ flow = {
         "skipP1": True,
         "skipP1Note": "用户要求先做完剩余 P0，然后直接做 P2。窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、安装包先不做。",
         "remainingP0": "completed",
-        "remainingP0Note": "pkg-07、pkg-08、pkg-09 已完成。pkg-10 多窗口已完成。pkg-11 macOS 平台已完成。pkg-12 可选窗口内嵌已完成。不要实现 pkg-13 及之后的包。",
+        "remainingP0Note": "pkg-07 至 pkg-12 已完成。pkg-19 预览模式已完成。不要实现 pkg-13 至 pkg-18。",
         "nextPackage": "pkg-13-activity-observe",
         "defaultShortcut": "Control+KeyO",
         "shortcutMustBeConfigurable": True,
         "embedIsOptIn": True,
-        "embedNote": "默认仍是切到真实窗口。内嵌只做 Windows 实验，失败回退聚焦。",
+        "embedNote": "点标签默认仍切系统窗口。预览是应用栏上的显式动作，不是卡片持久开关。一次一个窗口。失败回退聚焦并回到调度台。",
+        "previewModeKeepsChrome": True,
+        "previewModeNote": "预览时保留顶栏、应用栏、左侧工作区、右侧白板；中间主体换成铺满的真实窗口。规格见 docs/product/workspace-preview-mode.md。",
         "activityObserveIsOptIn": True,
         "activityObserveNote": "只记前台窗口标题、进程名和时间。不钩键盘，不读软件内部，不上传。",
         "agentUsesCanvasOnly": True,
@@ -64,6 +68,7 @@ flow = {
         "同一软件多窗口列表与按窗口聚焦",
         "macOS 真实扫描、启动、聚焦",
         "可选的 Windows 窗口内嵌实验",
+        "工作区预览模式：应用栏一键预览，中间栏主体铺满一个可操作窗口",
         "可选的窗口标题活动观察",
         "画布手动 AI 总结",
         "基于画布的费曼学习 Agent",
@@ -85,6 +90,7 @@ flow = {
             {"id": "wave-p0", "packages": ["pkg-07-settings-and-shortcut", "pkg-08-quick-switch-panel", "pkg-09-p0-acceptance"]},
             {"id": "wave-p2-a", "packages": ["pkg-10-multi-window", "pkg-11-macos-platform", "pkg-14-ai-canvas-summary", "pkg-16-device-sync", "pkg-18-plugin-marketplace"]},
             {"id": "wave-p2-b", "packages": ["pkg-12-window-embed", "pkg-13-activity-observe", "pkg-15-feynman-agent", "pkg-17-collaboration"]},
+            {"id": "wave-p2-preview", "packages": ["pkg-19-preview-mode"]},
         ],
         "onePackageAtATimeForSingleAgent": True,
         "doNotExpandScope": True,

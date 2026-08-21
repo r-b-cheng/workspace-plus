@@ -60,6 +60,7 @@ struct EmbedSession {
     original_style: i32,
     original_ex_style: i32,
     original_parent: isize,
+    preview_seq: u64,
 }
 
 /// Orchestrates repositories and the injectable platform adapter.
@@ -69,6 +70,7 @@ pub struct AppService {
     paths: AppPaths,
     shortcut_registration: Mutex<ShortcutRegistrationState>,
     embed_session: Mutex<Option<EmbedSession>>,
+    embed_ops: Mutex<()>,
 }
 
 impl AppService {
@@ -82,6 +84,7 @@ impl AppService {
             paths,
             shortcut_registration: Mutex::new(ShortcutRegistrationState::default()),
             embed_session: Mutex::new(None),
+            embed_ops: Mutex::new(()),
         })
     }
 
@@ -125,6 +128,12 @@ impl AppService {
         self.embed_session
             .lock()
             .map_err(|_| AppError::internal("embed session lock is poisoned"))
+    }
+
+    fn lock_embed_ops(&self) -> Result<MutexGuard<'_, ()>, AppError> {
+        self.embed_ops
+            .lock()
+            .map_err(|_| AppError::internal("embed ops lock is poisoned"))
     }
 
     fn workspace_app_dto(&self, workspace_app_id: &str) -> Result<WorkspaceApp, AppError> {
@@ -878,15 +887,51 @@ impl AppService {
         workspace_app_id: &str,
         host_bounds: Option<HostBounds>,
         host_hwnd: Option<isize>,
+        preview_seq: Option<u64>,
+    ) -> Result<EmbedWorkspaceAppResult, AppError> {
+        let _ops = self.lock_embed_ops()?;
+        self.embed_workspace_app_window_locked(
+            workspace_app_id,
+            host_bounds,
+            host_hwnd,
+            preview_seq,
+        )
+    }
+
+    fn embed_workspace_app_window_locked(
+        &self,
+        workspace_app_id: &str,
+        host_bounds: Option<HostBounds>,
+        host_hwnd: Option<isize>,
+        preview_seq: Option<u64>,
     ) -> Result<EmbedWorkspaceAppResult, AppError> {
         let app = self.workspace_app_dto(workspace_app_id)?;
-        if !app.embed_enabled {
-            return Err(AppError::validation("未打开在本窗口预览"));
+
+        #[cfg(windows)]
+        {
+            if self.embedded_workspace_app_id()?.as_deref() == Some(workspace_app_id) {
+                if let Some(result) = self.try_update_embedded_bounds(
+                    workspace_app_id,
+                    host_hwnd,
+                    host_bounds.as_ref(),
+                )? {
+                    return Ok(result);
+                }
+            }
         }
 
-        // Drop any current preview first. A later failure must not leave the
-        // previous window parented while the UI treats preview as finished.
-        let _ = self.release_embedded_window();
+        if self.should_ignore_stale_embed(workspace_app_id, preview_seq)? {
+            return Ok(EmbedWorkspaceAppResult {
+                workspace_app: app,
+                embedded: false,
+                fallback_focused: false,
+                reason: None,
+            });
+        }
+
+        // Different target (or no session): release first so a failed second
+        // embed cannot leave the previous window parented.
+        let _ = self.release_embedded_window_locked(None);
 
         #[cfg(not(windows))]
         {
@@ -921,6 +966,7 @@ impl AppService {
                 &opaque_id,
                 host_hwnd,
                 host_bounds.as_ref(),
+                preview_seq.unwrap_or(0),
             ) {
                 return self.embed_fallback(workspace_app_id, reason);
             }
@@ -934,8 +980,29 @@ impl AppService {
     }
 
     pub fn release_embedded_window(&self) -> Result<ReleaseEmbeddedWindowResult, AppError> {
+        self.release_embedded_window_for(None)
+    }
+
+    pub fn release_embedded_window_for(
+        &self,
+        workspace_app_id: Option<&str>,
+    ) -> Result<ReleaseEmbeddedWindowResult, AppError> {
+        let _ops = self.lock_embed_ops()?;
+        self.release_embedded_window_locked(workspace_app_id)
+    }
+
+    fn release_embedded_window_locked(
+        &self,
+        workspace_app_id: Option<&str>,
+    ) -> Result<ReleaseEmbeddedWindowResult, AppError> {
         let session = {
             let mut guard = self.lock_embed()?;
+            if let Some(filter) = workspace_app_id {
+                match guard.as_ref() {
+                    Some(session) if session.workspace_app_id == filter => {}
+                    _ => return Ok(ReleaseEmbeddedWindowResult { released: false }),
+                }
+            }
             guard.take()
         };
         let Some(session) = session else {
@@ -974,6 +1041,21 @@ impl AppService {
             .map(|session| session.workspace_id.clone()))
     }
 
+    fn should_ignore_stale_embed(
+        &self,
+        workspace_app_id: &str,
+        preview_seq: Option<u64>,
+    ) -> Result<bool, AppError> {
+        let Some(incoming) = preview_seq else {
+            return Ok(false);
+        };
+        let guard = self.lock_embed()?;
+        let Some(session) = guard.as_ref() else {
+            return Ok(false);
+        };
+        Ok(session.workspace_app_id != workspace_app_id && incoming < session.preview_seq)
+    }
+
     fn release_embedded_if_workspace(&self, workspace_id: &str) -> Result<(), AppError> {
         if self.embedded_workspace_id()?.as_deref() == Some(workspace_id) {
             self.release_embedded_window()?;
@@ -1005,6 +1087,27 @@ impl AppService {
             original_style: 0,
             original_ex_style: 0,
             original_parent: 0,
+            preview_seq: 1,
+        });
+        Ok(())
+    }
+
+    #[doc(hidden)]
+    pub fn test_force_embed_session_seq(
+        &self,
+        workspace_id: &str,
+        workspace_app_id: &str,
+        preview_seq: u64,
+    ) -> Result<(), AppError> {
+        let mut session = self.lock_embed()?;
+        *session = Some(EmbedSession {
+            workspace_id: workspace_id.to_string(),
+            workspace_app_id: workspace_app_id.to_string(),
+            opaque_window_id: "mock:embed-session".into(),
+            original_style: 0,
+            original_ex_style: 0,
+            original_parent: 0,
+            preview_seq,
         });
         Ok(())
     }
@@ -1015,6 +1118,33 @@ impl AppService {
             .ok()
             .and_then(|guard| guard.as_ref().map(|_| ()))
             .is_some()
+    }
+
+    #[cfg(windows)]
+    fn try_update_embedded_bounds(
+        &self,
+        workspace_app_id: &str,
+        host_hwnd: Option<isize>,
+        host_bounds: Option<&HostBounds>,
+    ) -> Result<Option<EmbedWorkspaceAppResult>, AppError> {
+        let session = self.lock_embed()?.clone();
+        let Some(session) = session else {
+            return Ok(None);
+        };
+        if let Err(reason) = crate::platform::windows::embed::update_embedded_bounds(
+            &session.opaque_window_id,
+            host_hwnd.unwrap_or(0),
+            host_bounds.map(|bounds| (bounds.x, bounds.y, bounds.width, bounds.height)),
+        ) {
+            let _ = self.release_embedded_window_locked(Some(workspace_app_id));
+            return Ok(Some(self.embed_fallback(workspace_app_id, reason)?));
+        }
+        Ok(Some(EmbedWorkspaceAppResult {
+            workspace_app: self.workspace_app_dto(workspace_app_id)?,
+            embedded: true,
+            fallback_focused: false,
+            reason: None,
+        }))
     }
 
     fn embed_fallback(
@@ -1042,6 +1172,7 @@ impl AppService {
         opaque_id: &str,
         host_hwnd: Option<isize>,
         host_bounds: Option<&HostBounds>,
+        preview_seq: u64,
     ) -> Result<(), String> {
         if let Some(reason) = crate::platform::windows::embed::reject_reason_for_opaque_id(opaque_id)
         {
@@ -1065,6 +1196,7 @@ impl AppService {
             original_style: restore.original_style,
             original_ex_style: restore.original_ex_style,
             original_parent: restore.original_parent,
+            preview_seq,
         });
         Ok(())
     }

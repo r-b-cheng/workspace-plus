@@ -746,14 +746,66 @@ fn embed_without_switch_does_not_pretend_success() {
         .service
         .launch_workspace_app(&workspace.id, &notepad.id)
         .unwrap();
-    let err = env
+    assert!(!launched.embed_enabled);
+
+    let result = env
         .service
-        .embed_workspace_app_window(&launched.id, None, None)
-        .unwrap_err();
-    assert_eq!(err.code, "Validation");
-    assert!(err.message.contains("未打开在本窗口预览"));
-    assert!(!err.message.to_ascii_lowercase().contains("hwnd"));
-    let json = serde_json::to_string(&err).unwrap();
+        .embed_workspace_app_window(&launched.id, None, None, None)
+        .unwrap();
+    assert!(!result.embedded);
+    assert!(result.fallback_focused);
+    let reason = result.reason.clone().expect("readable reason");
+    assert!(!reason.is_empty());
+    assert!(!reason.contains("未打开在本窗口预览"));
+    assert!(!reason.to_ascii_lowercase().contains("hwnd"));
+    assert_eq!(result.workspace_app.status, "running");
+    let json = serde_json::to_string(&result).unwrap();
+    assert!(!json.to_ascii_lowercase().contains("hwnd"));
+}
+
+#[test]
+fn same_app_embed_updates_bounds_without_dropping_session() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("同目标改尺寸", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    env.service
+        .test_force_embed_session(&workspace.id, &launched.id)
+        .unwrap();
+    assert!(env.service.test_has_embed_session());
+
+    let result = env
+        .service
+        .embed_workspace_app_window(
+            &launched.id,
+            Some(workspace_hub_lib::domain::HostBounds {
+                x: 12,
+                y: 24,
+                width: 640,
+                height: 480,
+            }),
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(result.embedded);
+    assert!(!result.fallback_focused);
+    assert!(result.reason.is_none());
+    assert!(env.service.test_has_embed_session());
+    let json = serde_json::to_string(&result).unwrap();
     assert!(!json.to_ascii_lowercase().contains("hwnd"));
 }
 
@@ -782,7 +834,7 @@ fn embed_mock_window_falls_back_to_focus() {
 
     let result = env
         .service
-        .embed_workspace_app_window(&launched.id, None, None)
+        .embed_workspace_app_window(&launched.id, None, None, None)
         .unwrap();
     assert!(!result.embedded);
     assert!(result.fallback_focused);
@@ -818,7 +870,7 @@ fn release_embedded_window_is_noop_and_keeps_window() {
         .unwrap();
     let _ = env
         .service
-        .embed_workspace_app_window(&launched.id, None, None)
+        .embed_workspace_app_window(&launched.id, None, None, None)
         .unwrap();
 
     let first = env.service.release_embedded_window().unwrap();
@@ -830,6 +882,95 @@ fn release_embedded_window_is_noop_and_keeps_window() {
     let json = serde_json::to_string(&again).unwrap();
     assert!(!json.to_ascii_lowercase().contains("hwnd"));
     assert!(json.contains("released"));
+}
+
+#[test]
+fn release_embedded_window_ignores_non_matching_app() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("定向释放", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    env.service
+        .test_force_embed_session(&workspace.id, &launched.id)
+        .unwrap();
+
+    let skipped = env
+        .service
+        .release_embedded_window_for(Some("wa-other"))
+        .unwrap();
+    assert!(!skipped.released);
+    assert!(env.service.test_has_embed_session());
+
+    let matched = env
+        .service
+        .release_embedded_window_for(Some(&launched.id))
+        .unwrap();
+    assert!(matched.released);
+    assert!(!env.service.test_has_embed_session());
+
+    env.service
+        .test_force_embed_session(&workspace.id, &launched.id)
+        .unwrap();
+    let unscoped = env.service.release_embedded_window().unwrap();
+    assert!(unscoped.released);
+    assert!(!env.service.test_has_embed_session());
+}
+
+#[test]
+fn stale_embed_seq_does_not_release_newer_session() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("过期预览", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let chrome = env
+        .service
+        .search_installed_apps("chrome", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let first = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    let second = env
+        .service
+        .launch_workspace_app(&workspace.id, &chrome.id)
+        .unwrap();
+    env.service
+        .test_force_embed_session_seq(&workspace.id, &second.id, 2)
+        .unwrap();
+
+    let result = env
+        .service
+        .embed_workspace_app_window(&first.id, None, None, Some(1))
+        .unwrap();
+    assert!(!result.embedded);
+    assert!(!result.fallback_focused);
+    assert!(result.reason.is_none());
+    assert!(env.service.test_has_embed_session());
 }
 
 #[test]
@@ -872,7 +1013,7 @@ fn failed_second_embed_releases_existing_session() {
         .unwrap();
     let result = env
         .service
-        .embed_workspace_app_window(&second.id, None, None)
+        .embed_workspace_app_window(&second.id, None, None, None)
         .unwrap();
     assert!(!result.embedded);
     assert!(result.fallback_focused);

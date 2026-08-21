@@ -1,13 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
-import { EMBED_PREVIEW_ACTION, EMBED_PREVIEW_LABEL } from '@/features/windows/embed-copy';
 import {
   canFocusWorkspaceApp,
   canFocusWorkspaceAppWindow,
-  canPreviewWorkspaceApp,
   canReopenWorkspaceApp,
   displayWorkspaceAppTitle,
-  isWorkspaceAppEmbedEnabled,
   workspaceAppStatusLabel,
   workspaceAppWindowStatusLabel,
 } from '@/features/windows/window-status';
@@ -47,10 +44,6 @@ export function WorkspaceAppCard({
     (state) => state.toggleWorkspaceAppWindows,
   );
   const focusNativeWindow = useWorkspaceAppStore((state) => state.focusNativeWindow);
-  const setWorkspaceAppEmbed = useWorkspaceAppStore((state) => state.setWorkspaceAppEmbed);
-  const embedWorkspaceAppWindow = useWorkspaceAppStore((state) => state.embedWorkspaceAppWindow);
-  const embedEnabled = isWorkspaceAppEmbedEnabled(app);
-  const showPreview = canPreviewWorkspaceApp(app);
 
   return (
     <article
@@ -84,33 +77,6 @@ export function WorkspaceAppCard({
             onClick={() => onActivate(app)}
           >
             切换窗口
-          </Button>
-        ) : null}
-        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={embedEnabled}
-            disabled={pending}
-            data-testid={`workspace-app-embed-toggle-${app.id}`}
-            onChange={(event) => {
-              event.stopPropagation();
-              void setWorkspaceAppEmbed(app.id, event.target.checked);
-            }}
-          />
-          {EMBED_PREVIEW_LABEL}
-        </label>
-        {showPreview ? (
-          <Button
-            variant="ghost"
-            className="h-auto w-fit rounded-lg px-2.5 py-2 text-muted-foreground"
-            data-testid={`workspace-app-embed-button-${app.id}`}
-            disabled={pending}
-            onClick={(event) => {
-              event.stopPropagation();
-              void embedWorkspaceAppWindow(app.id);
-            }}
-          >
-            {EMBED_PREVIEW_ACTION}
           </Button>
         ) : null}
         <Button

@@ -23,7 +23,7 @@ import { RenameWorkspaceDialog } from '@/features/workspaces/components/rename-w
 import { WorkspaceSidebar } from '@/features/workspaces/components/workspace-sidebar';
 import { useWorkspaceStore } from '@/features/workspaces/store/workspace-store';
 import { isWindowClosedError, userMessageForError } from '@/lib/errors';
-import type { AppSettings } from '@/lib/types';
+import type { AppSettings, WorkspaceView } from '@/lib/types';
 
 function settingsCommandErrorMessage(error: unknown): string {
   const err = toAppApiError(error);
@@ -77,6 +77,7 @@ export function WorkspaceShell() {
   const syncWorkspaceAppCount = useWorkspaceAppStore((state) => state.syncWorkspaceAppCount);
   const embeddedWorkspaceAppId = useWorkspaceAppStore((state) => state.embeddedWorkspaceAppId);
   const pendingEmbedWorkspaceAppId = useWorkspaceAppStore((state) => state.pendingEmbedWorkspaceAppId);
+  const embedWorkspaceAppWindow = useWorkspaceAppStore((state) => state.embedWorkspaceAppWindow);
   const releaseEmbeddedWindow = useWorkspaceAppStore((state) => state.releaseEmbeddedWindow);
 
   const saveStatus = useCanvasStore((state) => state.saveStatus);
@@ -103,6 +104,10 @@ export function WorkspaceShell() {
     () => filterWorkspaceApps(workspaceApps, contentQuery),
     [contentQuery, workspaceApps],
   );
+  const workspaceView: WorkspaceView =
+    selectedWorkspace && (embeddedWorkspaceAppId || pendingEmbedWorkspaceAppId)
+      ? 'preview'
+      : 'dispatcher';
 
   useEffect(() => {
     let cancelled = false;
@@ -205,8 +210,8 @@ export function WorkspaceShell() {
   }, []);
 
   return (
-    <main className="flex min-h-screen bg-background text-foreground" data-testid="workspace-shell">
-      <div className="flex min-h-screen shrink-0 max-[820px]:hidden" style={{ width: leftWidth }}>
+    <main className="flex h-screen overflow-hidden bg-background text-foreground" data-testid="workspace-shell">
+      <div className="flex h-full shrink-0 max-[820px]:hidden" style={{ width: leftWidth }}>
         <WorkspaceSidebar
           workspaces={workspaces}
           selectedWorkspaceId={selectedWorkspaceId}
@@ -228,7 +233,11 @@ export function WorkspaceShell() {
         onEnd={endResize}
       />
 
-      <section className="flex min-w-0 flex-1 flex-col gap-[18px] bg-card p-6">
+      <section
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-[18px] overflow-hidden bg-card p-6"
+        data-testid="workspace-middle-pane"
+        data-workspace-view={workspaceView}
+      >
         {workspaceError ? (
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{workspaceError.message}</p>
         ) : null}
@@ -257,7 +266,7 @@ export function WorkspaceShell() {
           </>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-3.5 border-b border-border pb-[18px]">
+            <div className="flex shrink-0 flex-wrap items-center gap-3.5 border-b border-border pb-[18px]">
               <div className="min-w-0 flex-1 [&_header]:border-b-0 [&_header]:pb-0">
                 <CurrentWorkspaceHeader
                   workspace={selectedWorkspace}
@@ -272,26 +281,39 @@ export function WorkspaceShell() {
               </div>
               <QuickSwitchOpenButton />
             </div>
-            <WorkspaceAppTabs apps={visibleApps} onActivate={(app) => void activateWorkspaceApp(app)} onAddApp={handleAddApp} />
-            <WorkspaceOverview
-              workspace={selectedWorkspace}
-              hasApps={workspaceApps.length > 0}
-              loading={workspaceAppsLoading}
+            <WorkspaceAppTabs
+              apps={visibleApps}
+              previewWorkspaceAppId={embeddedWorkspaceAppId ?? pendingEmbedWorkspaceAppId}
+              onActivate={(app) => void activateWorkspaceApp(app)}
+              onPreview={(app) => void embedWorkspaceAppWindow(app.id)}
+              onExitPreview={() => void releaseEmbeddedWindow()}
               onAddApp={handleAddApp}
             />
-            <WorkspaceAppCardGrid
-              apps={visibleApps}
-              pendingAppIds={pendingWorkspaceAppIds}
-              onActivate={(app) => void activateWorkspaceApp(app)}
-              onReopen={(app) => void reopenWorkspaceApp(app)}
-              onRemove={(app) => {
-                void removeWorkspaceApp(app.id).then(() => syncAppCount(app.workspaceId));
-              }}
-            />
-            <EmbedPreviewHost
-              active={Boolean(embeddedWorkspaceAppId || pendingEmbedWorkspaceAppId)}
-              onExit={() => void releaseEmbeddedWindow()}
-            />
+            {workspaceView === 'preview' ? (
+              <EmbedPreviewHost
+                active
+                pending={Boolean(pendingEmbedWorkspaceAppId) && !embeddedWorkspaceAppId}
+                onExit={() => void releaseEmbeddedWindow()}
+              />
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto">
+                <WorkspaceOverview
+                  workspace={selectedWorkspace}
+                  hasApps={workspaceApps.length > 0}
+                  loading={workspaceAppsLoading}
+                  onAddApp={handleAddApp}
+                />
+                <WorkspaceAppCardGrid
+                  apps={visibleApps}
+                  pendingAppIds={pendingWorkspaceAppIds}
+                  onActivate={(app) => void activateWorkspaceApp(app)}
+                  onReopen={(app) => void reopenWorkspaceApp(app)}
+                  onRemove={(app) => {
+                    void removeWorkspaceApp(app.id).then(() => syncAppCount(app.workspaceId));
+                  }}
+                />
+              </div>
+            )}
           </>
         )}
       </section>
@@ -305,7 +327,7 @@ export function WorkspaceShell() {
         onMove={applyResize}
         onEnd={endResize}
       />
-      <div className="flex min-h-screen shrink-0 max-[1180px]:hidden" style={{ width: layout.rightWidth }}>
+      <div className="flex h-full shrink-0 max-[1180px]:hidden" style={{ width: layout.rightWidth }}>
         <WhiteboardPanel workspaceId={selectedWorkspaceId} workspaceName={selectedWorkspace?.name} />
       </div>
 

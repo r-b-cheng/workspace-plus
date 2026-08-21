@@ -32,7 +32,7 @@ docs/
 
 | 目录 | 放什么 | 不放什么 |
 |---|---|---|
-| `product/` | PRD、界面方向 | schema、command 清单、开发包 |
+| `product/` | PRD、界面方向、预览模式 | schema、command 清单、开发包 |
 | `specs/` | 工程规范、数据模型、平台、前端 UI、测试验收 | 执行排期、子任务勾选 |
 | `process/` | 总控原则、子智能体分工、开源复用 | 某个开发包的改动范围 |
 | `dev-plan/` | 竖切流程 JSON、目录规划、开发包 | 产品愿景正文 |
@@ -44,7 +44,7 @@ docs/dev-plan/
   README.md
   folder-structure.md
   development-flow.json          已完成的竖切
-  p0-p2-flow.json                当前总控：P0 剩余项已完成，下一轮从 pkg-10 进入 P2
+  p0-p2-flow.json                当前总控：pkg-12 已完成，当前包 pkg-19 预览模式；跳过 pkg-13 至 18
   assemble-p0-p2-flow.py
   packages/
     pkg-01-engineering-foundation/
