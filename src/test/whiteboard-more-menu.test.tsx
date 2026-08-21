@@ -25,6 +25,7 @@ describe('白板更多菜单', () => {
       mockCanvas({ workspaceId: 'ws-1', nodes: [mockCanvasNode()] }),
     );
     vi.mocked(canvasApi.saveCanvas).mockResolvedValue(mockCanvas({ workspaceId: 'ws-1' }));
+    vi.mocked(canvasApi.saveCanvasAsset).mockClear();
     vi.mocked(canvasApi.saveCanvasAsset).mockResolvedValue({
       id: 'asset-1',
       assetType: 'canvas_image',
@@ -60,6 +61,26 @@ describe('白板更多菜单', () => {
     expect(vi.mocked(canvasApi.saveCanvasAsset).mock.calls[0]?.[0]).toMatchObject({
       fileName: 'shot.png',
       source: 'manual_import',
+      workspaceId: 'ws-1',
+    });
+  });
+
+  it('焦点不在右栏时也能把剪贴板图片贴上画布', async () => {
+    render(<WhiteboardPanel workspaceId="ws-1" />);
+    const file = new File([new Uint8Array([137, 80, 78, 71])], 'clip.png', { type: 'image/png' });
+    const clipboardData = {
+      items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
+      files: [file],
+    };
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: clipboardData });
+    Object.defineProperty(event, 'target', { value: document.body });
+    window.dispatchEvent(event);
+
+    await waitFor(() => expect(canvasApi.saveCanvasAsset).toHaveBeenCalled());
+    expect(vi.mocked(canvasApi.saveCanvasAsset).mock.calls[0]?.[0]).toMatchObject({
+      fileName: 'clip.png',
+      source: 'clipboard',
       workspaceId: 'ws-1',
     });
   });

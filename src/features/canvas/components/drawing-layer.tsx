@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
+import { isTypingTarget } from '@/features/canvas/clipboard-images';
 import { cryptoRandomId } from '@/features/canvas/persist';
 import {
   DEFAULT_SCENE_COLOR,
@@ -92,13 +93,6 @@ function boxFromCorners(x1: number, y1: number, x2: number, y2: number) {
     width: Math.abs(x2 - x1),
     height: Math.abs(y2 - y1),
   };
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  return Boolean(target.closest('input, textarea, select, [contenteditable="true"], .cm-editor, .cm-content'));
 }
 
 function pathD(points: [number, number][]): string {

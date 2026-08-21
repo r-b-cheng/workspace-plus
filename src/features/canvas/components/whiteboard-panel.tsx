@@ -33,6 +33,7 @@ import { DrawingLayer, type DrawingLayerHandle } from '@/features/canvas/compone
 import { ImageCardNode } from '@/features/canvas/components/image-card-node';
 import { MarkdownCardNode } from '@/features/canvas/components/markdown-card-node';
 import { installCanvasE2eHooks } from '@/features/canvas/e2e-hooks';
+import { filesFromClipboardApi, filesFromClipboardData, isTypingTarget } from '@/features/canvas/clipboard-images';
 import {
   canvasEdgeArrowMarker,
   DEFAULT_CANVAS_EDGE_TYPE,
@@ -415,30 +416,44 @@ const WorkspaceCanvas = forwardRef<WorkspaceCanvasHandle, { workspaceId: string 
   );
 
   useEffect(() => {
-    const onPaste = (event: ClipboardEvent) => {
-      if (useCanvasStore.getState().canvasLoading) {
-        return;
-      }
-      const panel = paneRef.current?.closest('[data-testid="whiteboard-panel"]');
-      if (!panel || !event.target || !panel.contains(event.target as globalThis.Node)) {
-        return;
-      }
-      const files = clipboardImageFiles(event);
+    const placeClipboardImages = (files: File[]) => {
       if (files.length === 0) {
         return;
       }
-      event.preventDefault();
       const rect = paneRef.current?.getBoundingClientRect();
       const position = rect
-        ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + 96 })
+        ? screenToFlowPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          })
         : { x: 96, y: 96 };
-      for (const file of files) {
-        void addImageFromFile(file, 'clipboard', position);
-      }
+      addImages(files, position, 'clipboard');
     };
+
+    const onPaste = (event: ClipboardEvent) => {
+      if (useCanvasStore.getState().canvasLoading || !useCanvasStore.getState().workspaceId) {
+        return;
+      }
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+      const files = filesFromClipboardData(event.clipboardData);
+      if (files.length > 0) {
+        event.preventDefault();
+        placeClipboardImages(files);
+        return;
+      }
+      void filesFromClipboardApi().then((fallback) => {
+        if (useCanvasStore.getState().canvasLoading || !useCanvasStore.getState().workspaceId) {
+          return;
+        }
+        placeClipboardImages(fallback);
+      });
+    };
+
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [addImageFromFile, screenToFlowPosition]);
+  }, [addImages, screenToFlowPosition]);
 
   const onSelectDrawingElements = useCallback(
     (ids: string[]) => {
@@ -530,26 +545,3 @@ const WorkspaceCanvas = forwardRef<WorkspaceCanvasHandle, { workspaceId: string 
     </div>
   );
 });
-
-function clipboardImageFiles(event: ClipboardEvent): File[] {
-  const files: File[] = [];
-  const items = event.clipboardData?.items;
-  if (items) {
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        if (file) {
-          files.push(file);
-        }
-      }
-    }
-  }
-  if (files.length === 0 && event.clipboardData?.files) {
-    for (const file of event.clipboardData.files) {
-      if (file.type.startsWith('image/')) {
-        files.push(file);
-      }
-    }
-  }
-  return files;
-}
