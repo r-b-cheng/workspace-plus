@@ -10,7 +10,7 @@
     "pkg-13-activity-observe"
   ],
   "ownerHint": "白板 Canvas 智能体 / 数据与本地存储智能体",
-  "goal": "用户手动触发后，只根据当前工作区画布上的 Markdown、图片标题和连线生成一份可编辑总结。不读外部软件，不默认自动请求模型。",
+  "goal": "用户手动触发后，只根据当前工作区画布上的 Markdown、图片标题和连线生成一份可编辑总结。不读外部软件，不默认自动请求模型。对话写回和往 scene 上画放到 pkg-22。",
   "changeScope": {
     "summary": "先做画布上下文抽取、provider 配置、手动总结 command 和一张可撤销的总结卡片。不做费曼问答，不监听外部软件。",
     "allowedPaths": [

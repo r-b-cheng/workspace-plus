@@ -761,20 +761,18 @@ export const useWorkspaceAppStore = create<WorkspaceAppStore>((set, get) => ({
 
   async releaseEmbeddedWindow(input?: { workspaceAppId?: string }) {
     embedPreviewSeq += 1;
-    const embeddedWorkspaceAppId = get().embeddedWorkspaceAppId;
+    set({
+      embeddedWorkspaceAppId: null,
+      pendingEmbedWorkspaceAppId: null,
+    });
     try {
       if (input?.workspaceAppId) {
         await appApi.releaseEmbeddedWindow({ workspaceAppId: input.workspaceAppId });
       } else {
         await appApi.releaseEmbeddedWindow();
       }
-      set({
-        embeddedWorkspaceAppId: null,
-        pendingEmbedWorkspaceAppId: null,
-      });
     } catch (error) {
       set({
-        embeddedWorkspaceAppId: embeddedWorkspaceAppId,
         appError: toRawCommandError(error),
       });
     }

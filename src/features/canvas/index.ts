@@ -6,3 +6,4 @@ export {
   fromPersistedCanvasEdge,
   toPersistedCanvasEdge,
 } from './persist';
+export { emptyCanvasScene, normalizeCanvasScene } from './scene';

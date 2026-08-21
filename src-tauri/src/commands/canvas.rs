@@ -1,6 +1,8 @@
 use tauri::State;
 
-use crate::domain::{Asset, Canvas, CanvasAssetContent, CanvasEdgeInput, CanvasNode, CanvasNodeInput};
+use crate::domain::{
+    Asset, Canvas, CanvasAssetContent, CanvasEdgeInput, CanvasNode, CanvasNodeInput, CanvasScene,
+};
 use crate::errors::AppError;
 use crate::services::AppService;
 
@@ -18,11 +20,12 @@ pub fn save_canvas(
     workspace_id: String,
     nodes: Vec<CanvasNodeInput>,
     edges: Vec<CanvasEdgeInput>,
+    scene: Option<CanvasScene>,
 ) -> Result<Canvas, AppError> {
     if workspace_id.trim().is_empty() {
         return Err(AppError::validation("workspaceId is required"));
     }
-    state.save_canvas(&workspace_id, nodes, edges)
+    state.save_canvas(&workspace_id, nodes, edges, scene)
 }
 
 #[tauri::command(rename_all = "camelCase")]

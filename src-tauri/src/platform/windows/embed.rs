@@ -3,24 +3,72 @@
 //! Default `cargo test` must never reach SetParent: mock ids are rejected
 //! before any window handle is used.
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, RECT};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, POINT, RECT};
 use windows::Win32::Security::{
     GetSidSubAuthority, GetSidSubAuthorityCount, GetTokenInformation, TokenIntegrityLevel,
     TOKEN_MANDATORY_LABEL, TOKEN_QUERY,
 };
 use windows::Win32::System::Threading::{
-    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+    AttachThreadInput, GetCurrentProcess, GetCurrentThreadId, OpenProcess, OpenProcessToken,
+    PROCESS_QUERY_LIMITED_INFORMATION,
 };
+use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, SetFocus};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClassNameW, GetClientRect, GetParent, GetWindow, GetWindowLongW, GetWindowRect,
-    GetWindowThreadProcessId, IsWindow, MoveWindow, SetParent, SetWindowLongW, SetWindowPos,
-    ShowWindow, GW_CHILD, GW_HWNDNEXT, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, SWP_FRAMECHANGED,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_SHOW, WS_CHILD,
-    WS_POPUP,
+    BringWindowToTop, GetClassNameW, GetClientRect, GetForegroundWindow, GetParent,
+    GetWindow, GetWindowLongW, GetWindowPlacement, GetWindowRect, GetWindowThreadProcessId,
+    IsIconic, IsWindow, IsZoomed, MoveWindow, SetParent, SetWindowLongW, SetWindowPlacement,
+    SetWindowPos, ShowWindow, GW_CHILD, GW_HWNDNEXT, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, HWND_TOP,
+    SET_WINDOW_POS_FLAGS, SHOW_WINDOW_CMD, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_SHOWWINDOW, SW_MAXIMIZE, SW_MINIMIZE, SW_SHOW, SW_SHOWMAXIMIZED,
+    SW_SHOWMINIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNORMAL, WINDOWPLACEMENT, WINDOWPLACEMENT_FLAGS,
+    WS_CHILD, WS_POPUP,
 };
 
 use super::window_ops::hwnd_from_opaque_id;
 use crate::platform::rules::decode_opaque_window_id;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SavedWindowPlacement {
+    pub flags: u32,
+    pub show_cmd: u32,
+    pub min_x: i32,
+    pub min_y: i32,
+    pub max_x: i32,
+    pub max_y: i32,
+    pub normal_left: i32,
+    pub normal_top: i32,
+    pub normal_right: i32,
+    pub normal_bottom: i32,
+    pub screen_left: i32,
+    pub screen_top: i32,
+    pub screen_right: i32,
+    pub screen_bottom: i32,
+    pub has_placement: bool,
+    pub has_screen_rect: bool,
+}
+
+impl Default for SavedWindowPlacement {
+    fn default() -> Self {
+        Self {
+            flags: 0,
+            show_cmd: SW_SHOWNORMAL.0 as u32,
+            min_x: -1,
+            min_y: -1,
+            max_x: -1,
+            max_y: -1,
+            normal_left: 0,
+            normal_top: 0,
+            normal_right: 0,
+            normal_bottom: 0,
+            screen_left: 0,
+            screen_top: 0,
+            screen_right: 0,
+            screen_bottom: 0,
+            has_placement: false,
+            has_screen_rect: false,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct EmbedRestoreInfo {
@@ -28,6 +76,27 @@ pub struct EmbedRestoreInfo {
     pub original_style: i32,
     pub original_ex_style: i32,
     pub original_parent: isize,
+    pub placement: SavedWindowPlacement,
+}
+
+pub fn should_skip_bounds_update(parent: isize, host: isize, style: i32) -> bool {
+    parent != host || (style as u32 & WS_CHILD.0) == 0
+}
+
+/// After embed / bounds update: sit above WebView. Do not lock z-order or block activate.
+pub fn embed_child_pos_flags() -> SET_WINDOW_POS_FLAGS {
+    SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_SHOWWINDOW
+}
+
+/// After release: restyle without stealing the desktop foreground.
+pub fn restore_detached_pos_flags() -> SET_WINDOW_POS_FLAGS {
+    SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOACTIVATE
+}
+
+/// Release order must stay style → parent → placement. Never MoveWindow with host bounds after detach.
+#[cfg(test)]
+fn embed_restore_phases() -> [&'static str; 4] {
+    ["style", "parent", "placement", "frame-noactivate"]
 }
 
 pub fn reject_reason_for_opaque_id(opaque_window_id: &str) -> Option<&'static str> {
@@ -95,6 +164,7 @@ pub fn reparent_to_host(
         let original_parent = GetParent(hwnd)
             .map(|parent| parent.0 as isize)
             .unwrap_or(0);
+        let placement = capture_placement(hwnd);
 
         let style = original_style as u32;
         let new_style = (style & !WS_POPUP.0) | WS_CHILD.0;
@@ -112,15 +182,8 @@ pub fn reparent_to_host(
         }
 
         apply_host_bounds(hwnd, host, bounds, true);
-        let _ = SetWindowPos(
-            hwnd,
-            HWND::default(),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
-        );
+        raise_embedded_above_webview(hwnd);
+        focus_embedded_child(hwnd);
         let _ = ShowWindow(hwnd, SW_SHOW);
 
         Ok(EmbedRestoreInfo {
@@ -128,6 +191,7 @@ pub fn reparent_to_host(
             original_style,
             original_ex_style,
             original_parent,
+            placement,
         })
     }
 }
@@ -143,20 +207,26 @@ pub fn restore_embedded_window(info: &EmbedRestoreInfo) -> Result<(), String> {
         if !IsWindow(hwnd).as_bool() {
             return Ok(());
         }
-        let parent = HWND(info.original_parent as *mut core::ffi::c_void);
-        let _ = SetParent(hwnd, parent);
+        // style → parent → placement. Do not MoveWindow with leftover host bounds.
         SetWindowLongW(hwnd, GWL_STYLE, info.original_style);
         SetWindowLongW(hwnd, GWL_EXSTYLE, info.original_ex_style);
+        let parent = HWND(info.original_parent as *mut core::ffi::c_void);
+        let _ = SetParent(hwnd, parent);
+
+        let placed = apply_saved_placement(hwnd, &info.placement);
+        if !placed {
+            let _ = apply_saved_screen_rect(hwnd, &info.placement);
+        }
         let _ = SetWindowPos(
             hwnd,
-            HWND::default(),
+            HWND_TOP,
             0,
             0,
             0,
             0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+            restore_detached_pos_flags(),
         );
-        let _ = ShowWindow(hwnd, SW_SHOW);
+        let _ = ShowWindow(hwnd, restore_show_cmd(info.placement.show_cmd));
     }
     Ok(())
 }
@@ -179,9 +249,113 @@ pub fn update_embedded_bounds(
             return Err("窗口已关闭或无效，无法预览。".into());
         }
         let host = HWND(host_hwnd as *mut core::ffi::c_void);
+        let parent = GetParent(hwnd)
+            .map(|parent| parent.0 as isize)
+            .unwrap_or(0);
+        let style = GetWindowLongW(hwnd, GWL_STYLE);
+        if should_skip_bounds_update(parent, host_hwnd, style) {
+            return Ok(());
+        }
         apply_host_bounds(hwnd, host, bounds, true);
+        raise_embedded_above_webview(hwnd);
     }
     Ok(())
+}
+
+unsafe fn capture_placement(hwnd: HWND) -> SavedWindowPlacement {
+    let mut wp = WINDOWPLACEMENT {
+        length: core::mem::size_of::<WINDOWPLACEMENT>() as u32,
+        ..Default::default()
+    };
+    let has_placement = GetWindowPlacement(hwnd, &mut wp).is_ok();
+    let mut screen = RECT::default();
+    let has_screen_rect = GetWindowRect(hwnd, &mut screen).is_ok();
+    let show_cmd = if has_placement {
+        wp.showCmd
+    } else if IsIconic(hwnd).as_bool() {
+        SW_SHOWMINNOACTIVE.0 as u32
+    } else if IsZoomed(hwnd).as_bool() {
+        SW_SHOWMAXIMIZED.0 as u32
+    } else {
+        SW_SHOWNORMAL.0 as u32
+    };
+    SavedWindowPlacement {
+        flags: wp.flags.0,
+        show_cmd,
+        min_x: wp.ptMinPosition.x,
+        min_y: wp.ptMinPosition.y,
+        max_x: wp.ptMaxPosition.x,
+        max_y: wp.ptMaxPosition.y,
+        normal_left: wp.rcNormalPosition.left,
+        normal_top: wp.rcNormalPosition.top,
+        normal_right: wp.rcNormalPosition.right,
+        normal_bottom: wp.rcNormalPosition.bottom,
+        screen_left: screen.left,
+        screen_top: screen.top,
+        screen_right: screen.right,
+        screen_bottom: screen.bottom,
+        has_placement,
+        has_screen_rect,
+    }
+}
+
+unsafe fn apply_saved_placement(hwnd: HWND, saved: &SavedWindowPlacement) -> bool {
+    if !saved.has_placement {
+        return false;
+    }
+    let wp = WINDOWPLACEMENT {
+        length: core::mem::size_of::<WINDOWPLACEMENT>() as u32,
+        flags: WINDOWPLACEMENT_FLAGS(saved.flags),
+        showCmd: saved.show_cmd,
+        ptMinPosition: POINT {
+            x: saved.min_x,
+            y: saved.min_y,
+        },
+        ptMaxPosition: POINT {
+            x: saved.max_x,
+            y: saved.max_y,
+        },
+        rcNormalPosition: RECT {
+            left: saved.normal_left,
+            top: saved.normal_top,
+            right: saved.normal_right,
+            bottom: saved.normal_bottom,
+        },
+        ..Default::default()
+    };
+    SetWindowPlacement(hwnd, &wp).is_ok()
+}
+
+unsafe fn apply_saved_screen_rect(hwnd: HWND, saved: &SavedWindowPlacement) -> bool {
+    if !saved.has_screen_rect {
+        return false;
+    }
+    let width = saved.screen_right - saved.screen_left;
+    let height = saved.screen_bottom - saved.screen_top;
+    if width <= 0 || height <= 0 {
+        return false;
+    }
+    SetWindowPos(
+        hwnd,
+        HWND_TOP,
+        saved.screen_left,
+        saved.screen_top,
+        width,
+        height,
+        SWP_NOACTIVATE,
+    )
+    .is_ok()
+}
+
+fn restore_show_cmd(show_cmd: u32) -> SHOW_WINDOW_CMD {
+    let cmd = SHOW_WINDOW_CMD(show_cmd as i32);
+    if cmd == SW_SHOWMAXIMIZED || cmd == SW_MAXIMIZE {
+        SW_SHOWMAXIMIZED
+    } else if cmd == SW_SHOWMINIMIZED || cmd == SW_MINIMIZE || cmd == SW_SHOWMINNOACTIVE {
+        SW_SHOWMINNOACTIVE
+    } else {
+        SW_SHOWNORMAL
+    }
 }
 
 unsafe fn apply_host_bounds(
@@ -197,6 +371,7 @@ unsafe fn apply_host_bounds(
             (0, 0)
         };
         let _ = MoveWindow(hwnd, x + ox, y + oy, width, height, true);
+        raise_embedded_above_webview(hwnd);
         return;
     }
     let mut rect = RECT::default();
@@ -205,7 +380,40 @@ unsafe fn apply_host_bounds(
         let height = rect.bottom - rect.top;
         if width > 0 && height > 0 {
             let _ = MoveWindow(hwnd, 0, 0, width, height, true);
+            raise_embedded_above_webview(hwnd);
         }
+    }
+}
+
+unsafe fn raise_embedded_above_webview(hwnd: HWND) {
+    let _ = SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, embed_child_pos_flags());
+}
+
+unsafe fn focus_embedded_child(hwnd: HWND) {
+    let _ = EnableWindow(hwnd, true);
+    let foreground = GetForegroundWindow();
+    let mut fg_pid = 0u32;
+    let fg_tid = GetWindowThreadProcessId(foreground, Some(&mut fg_pid));
+    let mut target_pid = 0u32;
+    let target_tid = GetWindowThreadProcessId(hwnd, Some(&mut target_pid));
+    let current_tid = GetCurrentThreadId();
+
+    let attached_fg = fg_tid != 0
+        && fg_tid != current_tid
+        && AttachThreadInput(current_tid, fg_tid, true).as_bool();
+    let attached_target = target_tid != 0
+        && target_tid != current_tid
+        && target_tid != fg_tid
+        && AttachThreadInput(current_tid, target_tid, true).as_bool();
+
+    let _ = BringWindowToTop(hwnd);
+    let _ = SetFocus(hwnd);
+
+    if attached_target {
+        let _ = AttachThreadInput(current_tid, target_tid, false);
+    }
+    if attached_fg {
+        let _ = AttachThreadInput(current_tid, fg_tid, false);
     }
 }
 
@@ -305,6 +513,8 @@ unsafe fn integrity_rid(process: HANDLE) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    use windows::Win32::UI::WindowsAndMessaging::SWP_NOZORDER;
+
     use super::*;
 
     #[test]
@@ -335,5 +545,87 @@ mod tests {
         {
             assert!(!reason.to_ascii_lowercase().contains("hwnd"));
         }
+    }
+
+    #[test]
+    fn restore_info_keeps_copyable_placement() {
+        let info = EmbedRestoreInfo {
+            opaque_window_id: "mock:restore".into(),
+            original_style: 0x00CF0000,
+            original_ex_style: 0,
+            original_parent: 0,
+            placement: SavedWindowPlacement {
+                flags: 0,
+                show_cmd: SW_SHOWNORMAL.0 as u32,
+                min_x: -1,
+                min_y: -1,
+                max_x: -1,
+                max_y: -1,
+                normal_left: 80,
+                normal_top: 60,
+                normal_right: 880,
+                normal_bottom: 660,
+                screen_left: 80,
+                screen_top: 60,
+                screen_right: 880,
+                screen_bottom: 660,
+                has_placement: true,
+                has_screen_rect: true,
+            },
+        };
+        let copied: SavedWindowPlacement = info.placement;
+        assert_eq!(copied.normal_left, 80);
+        assert_eq!(copied.normal_right, 880);
+        assert_eq!(copied.show_cmd, SW_SHOWNORMAL.0 as u32);
+        assert!(restore_embedded_window(&info).is_ok());
+    }
+
+    #[test]
+    fn bounds_update_skips_when_not_child_of_host() {
+        let child_style = WS_CHILD.0 as i32;
+        let overlapped = 0x00CF_0000;
+        assert!(should_skip_bounds_update(0, 42, child_style));
+        assert!(should_skip_bounds_update(99, 42, child_style));
+        assert!(should_skip_bounds_update(42, 42, overlapped));
+        assert!(!should_skip_bounds_update(42, 42, child_style));
+    }
+
+    #[test]
+    fn embed_raise_allows_zorder_and_activation() {
+        let flags = embed_child_pos_flags();
+        assert!(!flags.contains(SWP_NOZORDER));
+        assert!(!flags.contains(SWP_NOACTIVATE));
+        assert!(flags.contains(SWP_FRAMECHANGED));
+        assert!(flags.contains(SWP_SHOWWINDOW));
+    }
+
+    #[test]
+    fn restore_frame_does_not_steal_foreground() {
+        let flags = restore_detached_pos_flags();
+        assert!(flags.contains(SWP_NOACTIVATE));
+        assert!(flags.contains(SWP_FRAMECHANGED));
+        assert_eq!(
+            embed_restore_phases(),
+            ["style", "parent", "placement", "frame-noactivate"]
+        );
+    }
+
+    #[test]
+    fn restore_show_cmd_keeps_minmax_without_forcing_active() {
+        assert_eq!(
+            restore_show_cmd(SW_SHOWMAXIMIZED.0 as u32),
+            SW_SHOWMAXIMIZED
+        );
+        assert_eq!(restore_show_cmd(SW_MAXIMIZE.0 as u32), SW_SHOWMAXIMIZED);
+        assert_eq!(
+            restore_show_cmd(SW_SHOWMINIMIZED.0 as u32),
+            SW_SHOWMINNOACTIVE
+        );
+        assert_eq!(restore_show_cmd(SW_MINIMIZE.0 as u32), SW_SHOWMINNOACTIVE);
+        assert_eq!(
+            restore_show_cmd(SW_SHOWMINNOACTIVE.0 as u32),
+            SW_SHOWMINNOACTIVE
+        );
+        assert_eq!(restore_show_cmd(SW_SHOWNORMAL.0 as u32), SW_SHOWNORMAL);
     }
 }

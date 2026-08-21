@@ -137,10 +137,90 @@ export type CanvasEdge = {
   updatedAt: string;
 };
 
+export type CanvasDrawingTool = 'select' | 'pen' | 'arrow' | 'line' | 'rect' | 'ellipse' | 'text';
+
+export type CanvasScenePathElement = {
+  id: string;
+  type: 'path';
+  points: [number, number][];
+  color?: string;
+  strokeWidth?: number;
+};
+
+export type CanvasSceneArrowElement = {
+  id: string;
+  type: 'arrow';
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color?: string;
+  strokeWidth?: number;
+};
+
+export type CanvasSceneLineElement = {
+  id: string;
+  type: 'line';
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color?: string;
+  strokeWidth?: number;
+};
+
+export type CanvasSceneRectElement = {
+  id: string;
+  type: 'rect';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color?: string;
+  strokeWidth?: number;
+  fill?: string | null;
+};
+
+export type CanvasSceneEllipseElement = {
+  id: string;
+  type: 'ellipse';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color?: string;
+  strokeWidth?: number;
+  fill?: string | null;
+};
+
+export type CanvasSceneTextElement = {
+  id: string;
+  type: 'text';
+  x: number;
+  y: number;
+  text: string;
+  fontSize?: number;
+  color?: string;
+};
+
+export type CanvasSceneElement =
+  | CanvasScenePathElement
+  | CanvasSceneArrowElement
+  | CanvasSceneLineElement
+  | CanvasSceneRectElement
+  | CanvasSceneEllipseElement
+  | CanvasSceneTextElement;
+
+export type CanvasScene = {
+  version: number;
+  elements: CanvasSceneElement[];
+};
+
 export type Canvas = {
   workspaceId: string;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
+  scene: CanvasScene;
   updatedAt?: string;
 };
 
@@ -177,6 +257,7 @@ export type SaveCanvasInput = {
   workspaceId: string;
   nodes: CanvasNodeInput[];
   edges: CanvasEdgeInput[];
+  scene?: CanvasScene;
 };
 
 export type UpsertCanvasNodeInput = {

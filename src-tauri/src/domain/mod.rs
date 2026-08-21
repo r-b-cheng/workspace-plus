@@ -17,7 +17,11 @@ pub use app::{
     RemoveWorkspaceAppResult, WorkspaceApp,
 };
 pub use asset::{Asset, CanvasAssetContent};
-pub use canvas::{Canvas, CanvasEdge, CanvasEdgeInput, CanvasNode, CanvasNodeInput};
+pub use canvas::{
+    Canvas, CanvasEdge, CanvasEdgeInput, CanvasNode, CanvasNodeInput, CanvasScene,
+    CanvasSceneArrowElement, CanvasSceneElement, CanvasSceneEllipseElement, CanvasSceneLineElement,
+    CanvasScenePathElement, CanvasSceneRectElement, CanvasSceneTextElement,
+};
 pub use settings::{
     AppSettings, DEFAULT_QUICK_SWITCH_SHORTCUT, REGISTRATION_CONFLICT, REGISTRATION_DENIED,
     REGISTRATION_REGISTERED, REGISTRATION_UNREGISTERED,

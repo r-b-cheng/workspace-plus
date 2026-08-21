@@ -24,7 +24,7 @@ export function WorkspaceAppTabs({
   onExitPreview,
 }: WorkspaceAppTabsProps) {
   return (
-    <nav className="flex shrink-0 flex-wrap gap-3">
+    <nav className="flex min-w-0 max-w-full shrink-0 flex-wrap gap-3">
       {apps.map((app) => {
         const previewing = previewWorkspaceAppId === app.id;
         const showPreview = Boolean(onPreview) && canPreviewWorkspaceApp(app);
@@ -35,14 +35,14 @@ export function WorkspaceAppTabs({
               key={app.id}
               variant="secondary"
               className={cn(
-                'h-auto rounded-lg border border-input bg-[#f9fbfe] px-4 py-2.5',
+                'h-auto max-w-full min-w-0 shrink whitespace-normal rounded-lg border border-input bg-[#f9fbfe] px-4 py-2.5',
                 app.status === 'running' && 'border-primary/40',
               )}
               data-testid={`workspace-app-tab-${app.id}`}
               onClick={() => onActivate(app)}
             >
-              {app.alias ?? app.name}
-              <span className="text-xs text-muted-foreground">{workspaceAppStatusLabel(app.status)}</span>
+              <span className="min-w-0 max-w-full truncate">{app.alias ?? app.name}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{workspaceAppStatusLabel(app.status)}</span>
             </Button>
           );
         }
@@ -51,23 +51,23 @@ export function WorkspaceAppTabs({
           <div
             key={app.id}
             className={cn(
-              'inline-flex items-stretch overflow-hidden rounded-lg border border-input bg-[#f9fbfe]',
+              'inline-flex max-w-full min-w-0 items-stretch overflow-hidden rounded-lg border border-input bg-[#f9fbfe]',
               app.status === 'running' && 'border-primary/40',
               previewing && 'border-primary bg-primary/5',
             )}
           >
             <Button
               variant="ghost"
-              className="h-auto rounded-none px-4 py-2.5"
+              className="h-auto min-w-0 max-w-full shrink whitespace-normal rounded-none px-4 py-2.5"
               data-testid={`workspace-app-tab-${app.id}`}
               onClick={() => onActivate(app)}
             >
-              {app.alias ?? app.name}
-              <span className="text-xs text-muted-foreground">{workspaceAppStatusLabel(app.status)}</span>
+              <span className="min-w-0 max-w-full truncate">{app.alias ?? app.name}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{workspaceAppStatusLabel(app.status)}</span>
             </Button>
             <Button
               variant="ghost"
-              className="h-auto rounded-none border-l border-input px-2.5 py-2.5 text-xs text-muted-foreground"
+              className="h-auto shrink-0 rounded-none border-l border-input px-2.5 py-2.5 text-xs text-muted-foreground"
               data-testid={`workspace-app-tab-preview-${app.id}`}
               onClick={() => {
                 if (previewing) {

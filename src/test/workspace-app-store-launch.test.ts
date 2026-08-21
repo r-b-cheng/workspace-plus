@@ -337,6 +337,32 @@ describe('预览请求世代与定向释放', () => {
     expect(appApi.releaseEmbeddedWindow).toHaveBeenCalledWith({ workspaceAppId: 'wa-a' });
   });
 
+  it('releaseEmbeddedWindow 先清预览 id，不等待 command', async () => {
+    let finishRelease: (value: { released: boolean }) => void = () => undefined;
+    vi.mocked(appApi.releaseEmbeddedWindow).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishRelease = resolve;
+        }),
+    );
+
+    useWorkspaceAppStore.setState({
+      currentWorkspaceId: 'ws-a',
+      workspaceApps: [mockWorkspaceApp({ id: 'wa-a', workspaceId: 'ws-a' })],
+      embeddedWorkspaceAppId: 'wa-a',
+      pendingEmbedWorkspaceAppId: null,
+    });
+
+    const pending = useWorkspaceAppStore.getState().releaseEmbeddedWindow();
+    expect(useWorkspaceAppStore.getState().embeddedWorkspaceAppId).toBeNull();
+    expect(useWorkspaceAppStore.getState().pendingEmbedWorkspaceAppId).toBeNull();
+    expect(appApi.releaseEmbeddedWindow).toHaveBeenCalled();
+
+    finishRelease({ released: true });
+    await pending;
+    expect(useWorkspaceAppStore.getState().embeddedWorkspaceAppId).toBeNull();
+  });
+
   it('已嵌入时 bounds 更新抛错会回到调度台并写出原因', async () => {
     const appA = mockWorkspaceApp({ id: 'wa-a', workspaceId: 'ws-a' });
     vi.mocked(appApi.embedWorkspaceAppWindow).mockRejectedValue(new Error('focus failed'));

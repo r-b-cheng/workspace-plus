@@ -2,8 +2,8 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use crate::domain::{
     app_type_to_launch_kind, installed_app_source_to_dto, native_window_status_to_dto,
-    workspace_app_status_to_dto, Asset, CanvasEdge, CanvasNode, InstalledApp, Workspace,
-    WorkspaceApp, WorkspaceAppWindow,
+    workspace_app_status_to_dto, Asset, CanvasEdge, CanvasNode, CanvasScene, InstalledApp,
+    Workspace, WorkspaceApp, WorkspaceAppWindow,
 };
 use crate::errors::AppError;
 
@@ -1327,11 +1327,61 @@ pub fn canvas_latest_updated_at(conn: &Connection, workspace_id: &str) -> Result
             UNION ALL
             SELECT updated_at FROM canvas_edges
              WHERE workspace_id = ?1 AND deleted_at IS NULL
+            UNION ALL
+            SELECT updated_at FROM canvas_scenes
+             WHERE workspace_id = ?1 AND deleted_at IS NULL
          )",
         [workspace_id],
         |row| row.get(0),
     )?;
     Ok(value)
+}
+
+pub fn canvas_scene_get(conn: &Connection, workspace_id: &str) -> Result<CanvasScene, AppError> {
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT scene_json FROM canvas_scenes
+             WHERE workspace_id = ?1 AND deleted_at IS NULL",
+            [workspace_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(raw
+        .as_deref()
+        .map(CanvasScene::from_json_str)
+        .unwrap_or_else(CanvasScene::empty))
+}
+
+pub fn canvas_scene_upsert(
+    conn: &Connection,
+    workspace_id: &str,
+    scene: &CanvasScene,
+    now: &str,
+) -> Result<(), AppError> {
+    let scene_json = serde_json::to_string(scene)?;
+    conn.execute(
+        "INSERT INTO canvas_scenes (workspace_id, scene_json, updated_at, deleted_at)
+         VALUES (?1, ?2, ?3, NULL)
+         ON CONFLICT(workspace_id) DO UPDATE SET
+            scene_json = excluded.scene_json,
+            updated_at = excluded.updated_at,
+            deleted_at = NULL",
+        params![workspace_id, scene_json, now],
+    )?;
+    Ok(())
+}
+
+pub fn canvas_scene_soft_delete_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    now: &str,
+) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE canvas_scenes SET deleted_at = ?1, updated_at = ?1
+         WHERE workspace_id = ?2 AND deleted_at IS NULL",
+        params![now, workspace_id],
+    )?;
+    Ok(())
 }
 
 pub fn asset_get(conn: &Connection, id: &str) -> Result<Option<Asset>, AppError> {

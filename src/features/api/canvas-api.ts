@@ -22,6 +22,7 @@ export const canvasApi = {
       workspaceId: input.workspaceId,
       nodes: input.nodes,
       edges: input.edges,
+      scene: input.scene,
     });
   },
 

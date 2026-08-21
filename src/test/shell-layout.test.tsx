@@ -23,7 +23,7 @@ import { workspaceApi } from '@/features/api/workspace-api';
 import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
 import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import { useWorkspaceStore } from '@/features/workspaces/store/workspace-store';
-import { mockCanvas, mockWorkspace } from '@/test/fixtures';
+import { mockCanvas, mockWorkspace, mockWorkspaceApp } from '@/test/fixtures';
 
 vi.mock('@/features/api/workspace-api', () => ({
   workspaceApi: {
@@ -122,5 +122,33 @@ describe('三栏宽度与左侧收缩', () => {
     expect(JSON.parse(window.localStorage.getItem(SHELL_LAYOUT_STORAGE_KEY) ?? '{}')).toMatchObject({
       leftWidth: 340,
     });
+  });
+
+  it('中间栏按自身宽度做容器查询，搜索不锁死最小宽', async () => {
+    vi.mocked(appApi.listWorkspaceApps).mockResolvedValue([
+      mockWorkspaceApp({ name: 'Very Long Application Name That Should Truncate' }),
+    ]);
+
+    render(<WorkspaceShell />);
+
+    const pane = await screen.findByTestId('workspace-middle-pane');
+    expect(pane.className).toMatch(/@container/);
+    expect(pane.className).toMatch(/min-w-0/);
+
+    const grid = await screen.findByTestId('workspace-app-card-grid');
+    expect(grid.className).not.toMatch(/max-\[820px\]/);
+    expect(grid.className).toMatch(/grid-cols-1/);
+    expect(grid.className).toMatch(/@\[420px\]:grid-cols-2/);
+    expect(grid.className).toMatch(/@\[720px\]:grid-cols-3/);
+
+    const card = screen.getByTestId('workspace-app-card');
+    expect(card.className).toMatch(/min-w-0/);
+    expect(card.className).toMatch(/overflow-hidden/);
+
+    const searchLabel = screen.getByTestId('workspace-search-input').closest('label');
+    expect(searchLabel?.className).not.toMatch(/min-w-\[260px\]/);
+    expect(searchLabel?.className).toMatch(/min-w-0/);
+    expect(screen.getByTestId('current-workspace-title').className).toMatch(/truncate/);
+    expect(screen.queryByTestId('workspace-overview')).not.toBeInTheDocument();
   });
 });

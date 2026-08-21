@@ -18,7 +18,7 @@
 
 样式和组件使用 Tailwind CSS 4、shadcn/ui、lucide-react。Tailwind 负责布局和视觉样式；shadcn/ui 提供可复制、可修改的组件源码，适合这个项目后续定制成自己的桌面工具设计系统；lucide-react 用于图标。这里不建议选 Ant Design 或 MUI 作为主组件库，因为截图方向是轻量桌面工具，不是传统后台系统，shadcn/ui 的可定制性更合适。
 
-白板主方案使用 React Flow / xyflow，而不是 Excalidraw。原因是你的目标更像 Obsidian Canvas：卡片、Markdown、截图、待办、时间线、软件记录之间的组织关系。React Flow 官方定位就是 node-based UI，并提供节点、边、拖拽、缩放、保存恢复、白板特性等能力，适合做卡片式画布。Excalidraw 可以作为后续“手绘白板/草图模式”的可选模块，但不作为第一版主白板。
+白板主方案使用 React Flow / xyflow，而不是 Excalidraw。原因是你的目标更像 Obsidian Canvas：卡片、Markdown、截图、待办、时间线、软件记录之间的组织关系。React Flow 官方定位就是 node-based UI，并提供节点、边、拖拽、缩放、保存恢复、白板特性等能力，适合做卡片式画布。手绘、形状和自由箭头不替换主白板，而是旁路一层自己的 scene JSON，与 xyflow 共用镜头；不要把 tldraw 当核心依赖（生产授权要 license key）。Excalidraw 如需导出兼容可以后做转换，不要当库表格式。详见 `docs/product/whiteboard-drawing-and-ai.md`。
 
 Markdown 卡片使用 CodeMirror 6 做编辑器，使用 react-markdown + remark-gfm 做预览。第一版如果要降低复杂度，也可以先用 textarea 编辑 Markdown，再逐步换成 CodeMirror。图片和截图卡片先按文件引用和本地资源路径处理，不做复杂图片编辑器。
 

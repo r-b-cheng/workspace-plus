@@ -111,7 +111,7 @@ describe('工作区预览模式', () => {
       expect(appApi.focusWorkspaceApp).toHaveBeenCalledWith({ workspaceAppId: 'wa-1' });
     });
     expect(appApi.embedWorkspaceAppWindow).not.toHaveBeenCalled();
-    expect(screen.getByTestId('workspace-overview')).toBeInTheDocument();
+    expect(screen.queryByTestId('workspace-overview')).not.toBeInTheDocument();
     expect(screen.getByTestId('workspace-app-card')).toBeInTheDocument();
     expect(screen.queryByTestId('embed-preview-host')).not.toBeInTheDocument();
     assertNoHwndOrForbiddenCopy();
@@ -178,6 +178,7 @@ describe('工作区预览模式', () => {
     expect(screen.getByTestId('workspace-middle-pane')).toHaveAttribute('data-workspace-view', 'preview');
     expect(screen.getByTestId('embed-preview-host-surface').className).toMatch(/flex-1/);
     expect(screen.getByTestId('embed-preview-host-surface').className).toMatch(/min-h-0/);
+    expect(screen.getByTestId('embed-preview-host-surface').className).toMatch(/pointer-events-none/);
     expect(screen.getByTestId('embed-preview-host-surface').className).not.toMatch(/min-h-\[240px\]/);
     expect(screen.getByTestId('embed-preview-exit-button')).toBeInTheDocument();
     expect(screen.getByTestId('workspace-app-tab-preview-wa-1')).toHaveTextContent(EXIT_EMBED_PREVIEW_LABEL);
@@ -207,7 +208,8 @@ describe('工作区预览模式', () => {
     expect(screen.getByTestId('app-error-banner')).not.toHaveTextContent('输入不完整或格式不正确');
     expect(screen.getByTestId('workspace-middle-pane')).toHaveAttribute('data-workspace-view', 'dispatcher');
     expect(screen.queryByTestId('embed-preview-host')).not.toBeInTheDocument();
-    expect(screen.getByTestId('workspace-overview')).toBeInTheDocument();
+    expect(screen.queryByTestId('workspace-overview')).not.toBeInTheDocument();
+    expect(screen.getByTestId('workspace-app-card')).toBeInTheDocument();
     expect(appApi.focusWorkspaceApp).not.toHaveBeenCalled();
     assertNoHwndOrForbiddenCopy();
   });
@@ -240,7 +242,8 @@ describe('工作区预览模式', () => {
       expect(screen.queryByTestId('embed-preview-host')).not.toBeInTheDocument();
     });
     expect(screen.getByTestId('workspace-middle-pane')).toHaveAttribute('data-workspace-view', 'dispatcher');
-    expect(screen.getByTestId('workspace-overview')).toBeInTheDocument();
+    expect(screen.queryByTestId('workspace-overview')).not.toBeInTheDocument();
+    expect(screen.getByTestId('workspace-app-card')).toBeInTheDocument();
     expect(useWorkspaceAppStore.getState().embeddedWorkspaceAppId).toBeNull();
   });
 

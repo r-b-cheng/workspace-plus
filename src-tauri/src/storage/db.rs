@@ -12,6 +12,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         include_str!("../../migrations/001_init_core.sql"),
     ),
     ("002_indexes", include_str!("../../migrations/002_indexes.sql")),
+    (
+        "003_canvas_scenes",
+        include_str!("../../migrations/003_canvas_scenes.sql"),
+    ),
 ];
 
 const SCHEMA_MIGRATIONS_SQL: &str = "

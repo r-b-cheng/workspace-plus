@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use tempfile::TempDir;
-use workspace_hub_lib::domain::CanvasNodeInput;
+use workspace_hub_lib::domain::{
+    CanvasNodeInput, CanvasScene, CanvasSceneArrowElement, CanvasSceneElement,
+    CanvasScenePathElement, CanvasSceneRectElement,
+};
 use workspace_hub_lib::platform::{FocusWindowRequest, ListWindowsRequest, PlatformAdapter};
 use workspace_hub_lib::storage::{apply_migrations, open_database, reapply_migration_sql};
 use workspace_hub_lib::{AppService, MockPlatformAdapter};
@@ -228,6 +231,7 @@ fn canvas_save_then_reload_is_readable() {
                 edge_type: Some("default".into()),
                 metadata_json: None,
             }],
+            None,
         )
         .unwrap();
 
@@ -240,6 +244,263 @@ fn canvas_save_then_reload_is_readable() {
     assert_eq!(first.x, 40.0);
     assert_eq!(first.y, 80.0);
     assert_eq!(loaded.edges[0].source_node_id, "n1");
+    assert_eq!(loaded.scene, CanvasScene::empty());
+}
+
+#[test]
+fn canvas_scene_roundtrip_drops_renderer_fields() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("画图层", None, None, None)
+        .unwrap();
+    let scene = serde_json::from_value::<CanvasScene>(serde_json::json!({
+        "version": 1,
+        "elements": [
+            {
+                "id": "el-1",
+                "type": "path",
+                "points": [[120.0, 80.0], [160.0, 90.0], [210.0, 70.0]],
+                "color": "#176bff",
+                "strokeWidth": 2,
+                "selected": true,
+                "dragging": false
+            },
+            {
+                "id": "el-2",
+                "type": "arrow",
+                "x1": 80.0,
+                "y1": 120.0,
+                "x2": 240.0,
+                "y2": 160.0,
+                "color": "#172033"
+            },
+            {
+                "id": "el-3",
+                "type": "rect",
+                "x": 300.0,
+                "y": 40.0,
+                "width": 160.0,
+                "height": 90.0,
+                "color": "#176bff",
+                "fill": null
+            }
+        ]
+    }))
+    .unwrap();
+
+    env.service
+        .save_canvas(&workspace.id, vec![], vec![], Some(scene))
+        .unwrap();
+
+    let loaded = env.service.get_canvas(&workspace.id).unwrap();
+    assert_eq!(loaded.scene.version, 1);
+    assert_eq!(loaded.scene.elements.len(), 3);
+    assert_eq!(
+        loaded.scene.elements[0],
+        CanvasSceneElement::Path(CanvasScenePathElement {
+            id: "el-1".into(),
+            points: vec![[120.0, 80.0], [160.0, 90.0], [210.0, 70.0]],
+            color: Some("#176bff".into()),
+            stroke_width: Some(2.0),
+        })
+    );
+    assert_eq!(
+        loaded.scene.elements[1],
+        CanvasSceneElement::Arrow(CanvasSceneArrowElement {
+            id: "el-2".into(),
+            x1: 80.0,
+            y1: 120.0,
+            x2: 240.0,
+            y2: 160.0,
+            color: Some("#172033".into()),
+            stroke_width: None,
+        })
+    );
+    assert_eq!(
+        loaded.scene.elements[2],
+        CanvasSceneElement::Rect(CanvasSceneRectElement {
+            id: "el-3".into(),
+            x: 300.0,
+            y: 40.0,
+            width: 160.0,
+            height: 90.0,
+            color: Some("#176bff".into()),
+            stroke_width: None,
+            fill: None,
+        })
+    );
+
+    let stored: String = {
+        let conn = rusqlite::Connection::open(&env.service.paths().db_path).unwrap();
+        conn.query_row(
+            "SELECT scene_json FROM canvas_scenes WHERE workspace_id = ?1",
+            [&workspace.id],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    assert!(!stored.contains("selected"));
+    assert!(!stored.contains("dragging"));
+}
+
+#[test]
+fn canvas_scene_is_isolated_per_workspace() {
+    let env = setup();
+    let a = env
+        .service
+        .create_workspace("画图 A", None, None, None)
+        .unwrap();
+    let b = env
+        .service
+        .create_workspace("画图 B", None, None, None)
+        .unwrap();
+    let scene = CanvasScene::from_elements(vec![CanvasSceneElement::Path(
+        CanvasScenePathElement {
+            id: "el-a".into(),
+            points: vec![[0.0, 0.0], [12.0, 8.0]],
+            color: Some("#176bff".into()),
+            stroke_width: Some(2.0),
+        },
+    )]);
+    env.service
+        .save_canvas(&a.id, vec![], vec![], Some(scene))
+        .unwrap();
+
+    let canvas_a = env.service.get_canvas(&a.id).unwrap();
+    let canvas_b = env.service.get_canvas(&b.id).unwrap();
+    assert_eq!(canvas_a.scene.elements.len(), 1);
+    assert_eq!(canvas_b.scene, CanvasScene::empty());
+}
+
+#[test]
+fn save_canvas_none_preserves_existing_scene() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("保留 scene", None, None, None)
+        .unwrap();
+    let scene = CanvasScene::from_elements(vec![CanvasSceneElement::Arrow(
+        CanvasSceneArrowElement {
+            id: "el-keep".into(),
+            x1: 10.0,
+            y1: 10.0,
+            x2: 40.0,
+            y2: 40.0,
+            color: Some("#172033".into()),
+            stroke_width: None,
+        },
+    )]);
+    env.service
+        .save_canvas(&workspace.id, vec![], vec![], Some(scene.clone()))
+        .unwrap();
+    env.service
+        .save_canvas(
+            &workspace.id,
+            vec![CanvasNodeInput {
+                id: Some("n-keep".into()),
+                node_type: "markdown".into(),
+                title: Some("笔记".into()),
+                content_markdown: Some("still here".into()),
+                content_text: None,
+                asset_id: None,
+                x: 8.0,
+                y: 8.0,
+                width: Some(200.0),
+                height: Some(120.0),
+                color: None,
+                metadata_json: None,
+                z_index: Some(1),
+            }],
+            vec![],
+            None,
+        )
+        .unwrap();
+
+    let loaded = env.service.get_canvas(&workspace.id).unwrap();
+    assert_eq!(loaded.nodes.len(), 1);
+    assert_eq!(loaded.scene, scene);
+}
+
+#[test]
+fn canvas_scene_drops_invalid_type_and_get_succeeds() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("非法图形", None, None, None)
+        .unwrap();
+    let scene = serde_json::from_value::<CanvasScene>(serde_json::json!({
+        "version": 1,
+        "elements": [
+            {
+                "id": "ok",
+                "type": "path",
+                "points": [[0.0, 0.0], [4.0, 4.0]]
+            },
+            { "id": "bad", "type": "laser", "points": [[1, 1]] },
+            { "id": "missing-coords", "type": "ellipse" }
+        ]
+    }))
+    .unwrap();
+    env.service
+        .save_canvas(&workspace.id, vec![], vec![], Some(scene))
+        .unwrap();
+    let loaded = env.service.get_canvas(&workspace.id).unwrap();
+    assert_eq!(loaded.scene.elements.len(), 1);
+    assert!(matches!(
+        loaded.scene.elements[0],
+        CanvasSceneElement::Path(_)
+    ));
+
+    {
+        let conn = rusqlite::Connection::open(&env.service.paths().db_path).unwrap();
+        conn.execute(
+            "UPDATE canvas_scenes SET scene_json = ?1 WHERE workspace_id = ?2",
+            rusqlite::params!["not-json", &workspace.id],
+        )
+        .unwrap();
+    }
+    let recovered = env.service.get_canvas(&workspace.id).unwrap();
+    assert_eq!(recovered.scene, CanvasScene::empty());
+}
+
+#[test]
+fn delete_workspace_soft_deletes_scene() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("删区带图", None, None, None)
+        .unwrap();
+    let scene = CanvasScene::from_elements(vec![CanvasSceneElement::Rect(
+        CanvasSceneRectElement {
+            id: "el-gone".into(),
+            x: 1.0,
+            y: 2.0,
+            width: 30.0,
+            height: 20.0,
+            color: Some("#176bff".into()),
+            stroke_width: None,
+            fill: None,
+        },
+    )]);
+    env.service
+        .save_canvas(&workspace.id, vec![], vec![], Some(scene))
+        .unwrap();
+    env.service.delete_workspace(&workspace.id).unwrap();
+
+    let err = env.service.get_canvas(&workspace.id).unwrap_err();
+    assert_eq!(err.code, "NotFound");
+
+    let deleted_at: Option<String> = {
+        let conn = rusqlite::Connection::open(&env.service.paths().db_path).unwrap();
+        conn.query_row(
+            "SELECT deleted_at FROM canvas_scenes WHERE workspace_id = ?1",
+            [&workspace.id],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    assert!(deleted_at.is_some());
 }
 
 #[test]
@@ -971,6 +1232,68 @@ fn stale_embed_seq_does_not_release_newer_session() {
     assert!(!result.fallback_focused);
     assert!(result.reason.is_none());
     assert!(env.service.test_has_embed_session());
+}
+
+#[test]
+fn released_embed_seq_ignores_stale_bounds_reparent() {
+    let env = setup();
+    let workspace = env
+        .service
+        .create_workspace("释放后过期预览", None, None, None)
+        .unwrap();
+    env.service.refresh_installed_apps().unwrap();
+    let notepad = env
+        .service
+        .search_installed_apps("notepad", None)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let launched = env
+        .service
+        .launch_workspace_app(&workspace.id, &notepad.id)
+        .unwrap();
+    env.service
+        .test_force_embed_session_seq(&workspace.id, &launched.id, 5)
+        .unwrap();
+    assert!(env.service.test_has_embed_session());
+
+    let released = env.service.release_embedded_window().unwrap();
+    assert!(released.released);
+    assert!(!env.service.test_has_embed_session());
+
+    let stale = env
+        .service
+        .embed_workspace_app_window(&launched.id, None, None, Some(5))
+        .unwrap();
+    assert!(!stale.embedded);
+    assert!(!stale.fallback_focused);
+    assert!(stale.reason.is_none());
+    assert!(!env.service.test_has_embed_session());
+    assert!(env
+        .service
+        .test_should_ignore_stale_embed(&launched.id, Some(5))
+        .unwrap());
+    assert!(!env
+        .service
+        .test_should_ignore_stale_embed(&launched.id, Some(6))
+        .unwrap());
+    assert!(!env
+        .service
+        .test_should_ignore_stale_embed(&launched.id, None)
+        .unwrap());
+
+    let fresh = env
+        .service
+        .embed_workspace_app_window(&launched.id, None, None, Some(6))
+        .unwrap();
+    // Mock cannot reparent, but a higher seq must not take the stale-ignore path.
+    assert!(fresh.embedded || fresh.fallback_focused);
+    assert!(!env
+        .service
+        .test_should_ignore_stale_embed(&launched.id, Some(6))
+        .unwrap()
+        || env.service.test_has_embed_session());
 }
 
 #[test]

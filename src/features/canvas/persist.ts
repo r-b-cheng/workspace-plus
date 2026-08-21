@@ -1,11 +1,61 @@
-import type { Edge, Node } from '@xyflow/react';
+import { MarkerType, type Edge, type Node } from '@xyflow/react';
 
 import type { CanvasEdge, CanvasEdgeInput, CanvasNode, CanvasNodeInput, CanvasNodeType } from '@/lib/types';
+
+export const DEFAULT_CANVAS_EDGE_TYPE = 'smoothstep';
+export const CANVAS_EDGE_MARKER_END = 'arrowclosed' as const;
+
+type CanvasEdgeMetadata = {
+  markerEnd?: typeof CANVAS_EDGE_MARKER_END;
+  sourceHandle?: string;
+  targetHandle?: string;
+};
+
+export function canvasEdgeArrowMarker(): { type: MarkerType } {
+  return { type: MarkerType.ArrowClosed };
+}
 
 export const DEFAULT_MARKDOWN_WIDTH = 280;
 export const DEFAULT_MARKDOWN_HEIGHT = 200;
 export const DEFAULT_IMAGE_WIDTH = 240;
 export const DEFAULT_IMAGE_HEIGHT = 180;
+
+export const MARKDOWN_FONT_SIZES = [13, 16, 20, 24] as const;
+export type MarkdownFontSize = (typeof MARKDOWN_FONT_SIZES)[number];
+export const DEFAULT_MARKDOWN_FONT_SIZE: MarkdownFontSize = 13;
+
+export function isMarkdownFontSize(value: unknown): value is MarkdownFontSize {
+  return typeof value === 'number' && (MARKDOWN_FONT_SIZES as readonly number[]).includes(value);
+}
+
+function parseNodeMetadataRecord(metadataJson: string | undefined): Record<string, unknown> {
+  if (!metadataJson) {
+    return {};
+  }
+  try {
+    const parsed: unknown = JSON.parse(metadataJson);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    return { ...(parsed as Record<string, unknown>) };
+  } catch {
+    return {};
+  }
+}
+
+/** Card-level Markdown font size. Only 13 / 16 / 20 / 24; anything else falls back to 13. */
+export function parseMarkdownFontSize(metadataJson: string | undefined): MarkdownFontSize {
+  const fontSize = parseNodeMetadataRecord(metadataJson).fontSize;
+  return isMarkdownFontSize(fontSize) ? fontSize : DEFAULT_MARKDOWN_FONT_SIZE;
+}
+
+/** Merge fontSize into existing node metadata. Does not drop other fields. */
+export function mergeMarkdownFontSize(metadataJson: string | undefined, fontSize: MarkdownFontSize): string {
+  return JSON.stringify({
+    ...parseNodeMetadataRecord(metadataJson),
+    fontSize,
+  });
+}
 
 const NODE_TYPES: CanvasNodeType[] = [
   'markdown',
@@ -165,24 +215,107 @@ export function fromPersistedCanvasNode(node: CanvasNode): CanvasFlowNode {
   };
 }
 
+function optionalHandleId(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined;
+  }
+  return value;
+}
+
+function parseCanvasEdgeMetadata(value: string | undefined): CanvasEdgeMetadata {
+  if (!value) {
+    return {};
+  }
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    const record = parsed as Record<string, unknown>;
+    const metadata: CanvasEdgeMetadata = {};
+    if (record.markerEnd === CANVAS_EDGE_MARKER_END) {
+      metadata.markerEnd = CANVAS_EDGE_MARKER_END;
+    }
+    const sourceHandle = optionalHandleId(record.sourceHandle);
+    if (sourceHandle !== undefined) {
+      metadata.sourceHandle = sourceHandle;
+    }
+    const targetHandle = optionalHandleId(record.targetHandle);
+    if (targetHandle !== undefined) {
+      metadata.targetHandle = targetHandle;
+    }
+    return metadata;
+  } catch {
+    return {};
+  }
+}
+
+function toCanvasEdgeMetadataJson(edge: Edge): string {
+  const metadata: CanvasEdgeMetadata = { markerEnd: CANVAS_EDGE_MARKER_END };
+  const sourceHandle = optionalHandleId(edge.sourceHandle);
+  if (sourceHandle !== undefined) {
+    metadata.sourceHandle = sourceHandle;
+  }
+  const targetHandle = optionalHandleId(edge.targetHandle);
+  if (targetHandle !== undefined) {
+    metadata.targetHandle = targetHandle;
+  }
+  return JSON.stringify(metadata);
+}
+
+/** Product payload only. Drops selected / dragging and other renderer fields. */
 export function toPersistedCanvasEdge(edge: Edge): CanvasEdgeInput {
-  return {
+  const persisted: CanvasEdgeInput = {
     id: edge.id,
     sourceNodeId: edge.source,
     targetNodeId: edge.target,
-    label: typeof edge.label === 'string' ? edge.label : undefined,
-    edgeType: edge.type,
+    edgeType: optionalString(edge.type) ?? DEFAULT_CANVAS_EDGE_TYPE,
+    metadataJson: toCanvasEdgeMetadataJson(edge),
   };
+  const label = typeof edge.label === 'string' ? edge.label : undefined;
+  if (label !== undefined) {
+    persisted.label = label;
+  }
+  return persisted;
+}
+
+export type CanvasConnectionLike = {
+  source?: string | null;
+  target?: string | null;
+};
+
+/** Same directed pair only. Handles are ignored so a second A→B line cannot hit the unique index. */
+export function isValidCanvasConnection(
+  connection: CanvasConnectionLike,
+  existingEdges: CanvasConnectionLike[],
+): boolean {
+  const source = connection.source;
+  const target = connection.target;
+  if (!source || !target || source === target) {
+    return false;
+  }
+  return !existingEdges.some((edge) => edge.source === source && edge.target === target);
 }
 
 export function fromPersistedCanvasEdge(edge: CanvasEdge): Edge {
-  return {
+  const metadata = parseCanvasEdgeMetadata(edge.metadataJson);
+  const restored: Edge = {
     id: edge.id,
     source: edge.sourceNodeId,
     target: edge.targetNodeId,
-    label: edge.label,
-    type: edge.edgeType,
+    type: edge.edgeType || DEFAULT_CANVAS_EDGE_TYPE,
+    markerEnd: canvasEdgeArrowMarker(),
   };
+  if (edge.label !== undefined) {
+    restored.label = edge.label;
+  }
+  if (metadata.sourceHandle !== undefined) {
+    restored.sourceHandle = metadata.sourceHandle;
+  }
+  if (metadata.targetHandle !== undefined) {
+    restored.targetHandle = metadata.targetHandle;
+  }
+  return restored;
 }
 
 export function toCanvasNodeInput(node: CanvasNode): CanvasNodeInput {

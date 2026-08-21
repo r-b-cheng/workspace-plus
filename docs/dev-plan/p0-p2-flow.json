@@ -13,6 +13,7 @@
     "docs/product/workspace-manager-prd.md",
     "docs/product/workspace-preview-mode.md",
     "docs/product/window-liveness.md",
+    "docs/product/whiteboard-drawing-and-ai.md",
     "docs/process/project-development-plan.md",
     "docs/specs/engineering-standards-and-tech-stack.md",
     "docs/specs/data-model-and-storage-spec.md",
@@ -36,6 +37,10 @@
     "activityObserveIsOptIn": true,
     "activityObserveNote": "只记前台窗口标题、进程名和时间。不钩键盘，不读软件内部，不上传。",
     "agentUsesCanvasOnly": true,
+    "whiteboardDrawingIsOwnSceneJson": true,
+    "whiteboardDrawingNote": "卡片继续用 xyflow。手绘/形状另存 canvas_scenes.scene_json。不把整张白板换成 Excalidraw，不用 tldraw 当核心。规格见 docs/product/whiteboard-drawing-and-ai.md。",
+    "aiChatCanDraw": true,
+    "aiChatNote": "P2 最终形态是对着白板对话：读卡片/连线/scene，可讨论，可把新卡片和图形写回。pkg-22 依赖 pkg-14 与 pkg-21。",
     "syncFirstSliceIsExportImport": true,
     "collabFirstSliceIsReadOnlyShare": true,
     "pluginFirstSliceIsLocalOnly": true
@@ -50,8 +55,10 @@
     "工作区预览模式：应用栏一键预览，中间栏主体铺满一个可操作窗口",
     "已绑定窗口关闭后及时对账，不移出工作区软件",
     "可选的窗口标题活动观察",
+    "白板画图层：笔、自由箭头、形状，scene JSON",
     "画布手动 AI 总结",
     "基于画布的费曼学习 Agent",
+    "白板对话：读上下文、讨论、往白板上画",
     "工作区导出导入",
     "只读分享与本地评论",
     "本机插件清单与白名单加载"
@@ -80,7 +87,9 @@
       "pkg-17-collaboration",
       "pkg-18-plugin-marketplace",
       "pkg-19-preview-mode",
-      "pkg-20-window-liveness"
+      "pkg-20-window-liveness",
+      "pkg-21-whiteboard-drawing",
+      "pkg-22-ai-canvas-chat"
     ],
     "waves": [
       {
@@ -120,6 +129,15 @@
         "id": "wave-p2-liveness",
         "packages": [
           "pkg-20-window-liveness"
+        ]
+      },
+      {
+        "id": "wave-p2-whiteboard-ai",
+        "packages": [
+          "pkg-21-whiteboard-drawing",
+          "pkg-14-ai-canvas-summary",
+          "pkg-15-feynman-agent",
+          "pkg-22-ai-canvas-chat"
         ]
       }
     ],
@@ -862,7 +880,7 @@
         "pkg-13-activity-observe"
       ],
       "ownerHint": "白板 Canvas 智能体 / 数据与本地存储智能体",
-      "goal": "用户手动触发后，只根据当前工作区画布上的 Markdown、图片标题和连线生成一份可编辑总结。不读外部软件，不默认自动请求模型。",
+      "goal": "用户手动触发后，只根据当前工作区画布上的 Markdown、图片标题和连线生成一份可编辑总结。不读外部软件，不默认自动请求模型。对话写回和往 scene 上画放到 pkg-22。",
       "changeScope": {
         "summary": "先做画布上下文抽取、provider 配置、手动总结 command 和一张可撤销的总结卡片。不做费曼问答，不监听外部软件。",
         "allowedPaths": [
@@ -1562,6 +1580,214 @@
         "markdown": "docs/dev-plan/packages/pkg-20-window-liveness/README.md",
         "product": "docs/product/window-liveness.md",
         "manualAcceptance": "docs/dev-plan/packages/pkg-20-window-liveness/windows-liveness-manual-acceptance.md"
+      }
+    },
+    {
+      "id": "pkg-21-whiteboard-drawing",
+      "seq": 21,
+      "title": "白板画图层（笔、箭头、形状）",
+      "status": "completed",
+      "dependsOn": [
+        "pkg-09-p0-acceptance"
+      ],
+      "parallelWith": [],
+      "ownerHint": "白板 Canvas 智能体 / 数据与本地存储智能体",
+      "goal": "在现有卡片画布上加一层可画的 scene。用户能画笔迹、箭头、矩形、椭圆和短字。数据是版本化 JSON，和卡片共用镜头。不替换 xyflow，不引入 tldraw。",
+      "changeScope": {
+        "summary": "新增 canvas_scenes 与画图工具。卡片和卡片连线仍走 canvas_nodes / canvas_edges。",
+        "allowedPaths": [
+          "src-tauri/migrations/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/tests/**",
+          "src/features/canvas/**",
+          "src/features/api/**",
+          "src/lib/types.ts",
+          "src/styles/canvas.css",
+          "src/test/**",
+          "docs/dev-plan/packages/pkg-21-whiteboard-drawing/**",
+          "docs/product/whiteboard-drawing-and-ai.md",
+          "docs/specs/data-model-and-storage-spec.md"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/platform/**",
+          "src/features/agent/**",
+          "src/features/quick-switch/**"
+        ],
+        "allowedChanges": [
+          "每工作区一行 canvas_scenes.scene_json",
+          "白板工具：选择 / 画笔 / 箭头 / 矩形 / 椭圆 / 字",
+          "画图层与 React Flow 共用 viewport",
+          "按模式切换 pointer-events，避免画图时拖走卡片",
+          "自动保存 scene，切换工作区不串图",
+          "稳定 data-testid"
+        ],
+        "forbiddenChanges": [
+          "把主白板换成 Excalidraw 或 tldraw",
+          "把 React Flow 渲染字段写入 scene_json",
+          "实现 AI 对话或 summarize_canvas",
+          "读外部软件内部内容",
+          "钢笔贝塞尔、位图笔刷、激光笔"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d21-scene",
+          "name": "scene JSON",
+          "description": "version + elements；path / arrow / rect / ellipse / text。坐标是画布世界坐标。"
+        },
+        {
+          "id": "d21-tools",
+          "name": "画图工具栏",
+          "description": "能切换模式并落下元素；选择模式下可删图形。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s21-01",
+          "title": "scene 表与读写 command",
+          "status": "completed",
+          "doneWhen": "get_canvas / save_canvas 带上 scene，或等价的 get/save_canvas_scene；空工作区是 version 1 空数组。"
+        },
+        {
+          "id": "s21-02",
+          "title": "工具栏与元素渲染",
+          "status": "completed",
+          "doneWhen": "能画 path / arrow / rect / ellipse / text，并跟卡片一起缩放平移。"
+        },
+        {
+          "id": "s21-03",
+          "title": "模式命中与删除",
+          "status": "completed",
+          "doneWhen": "画图模式不拖卡片；选择模式能点到笔迹；Delete 删除选中图形。"
+        },
+        {
+          "id": "s21-04",
+          "title": "测试",
+          "status": "completed",
+          "doneWhen": "scene 往返、工作区隔离、非法 JSON 有测试。"
+        }
+      ],
+      "commands": [
+        "get_canvas",
+        "save_canvas"
+      ],
+      "acceptance": [
+        "能画一笔、一个箭头、一个框，重启还在",
+        "工作区 A 的图不出现在 B",
+        "卡片层行为不被画图模式破坏",
+        "scene 里没有 selected / dragging"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-21-whiteboard-drawing/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-21-whiteboard-drawing/README.md",
+        "product": "docs/product/whiteboard-drawing-and-ai.md"
+      }
+    },
+    {
+      "id": "pkg-22-ai-canvas-chat",
+      "seq": 22,
+      "title": "白板对话：读上下文、讨论、往白板上画",
+      "status": "pending",
+      "dependsOn": [
+        "pkg-14-ai-canvas-summary",
+        "pkg-21-whiteboard-drawing"
+      ],
+      "parallelWith": [],
+      "ownerHint": "白板 Canvas 智能体 / 数据与本地存储智能体",
+      "goal": "用户在当前工作区和 AI 对话。模型只读白板（卡片、连线、scene），可以回复、追问，并把新卡片或图形写回白板。默认手动发送，不读外部软件。",
+      "changeScope": {
+        "summary": "对话面板 + 画布上下文（含 scene）+ 可撤销的写回（新卡片 / scene upsert）。复用 pkg-14 的 provider。费曼模式仍以 pkg-15 为准，本包不重做费曼提示词。",
+        "allowedPaths": [
+          "src/features/agent/**",
+          "src/features/canvas/**",
+          "src/features/settings/**",
+          "src/features/api/**",
+          "src-tauri/src/commands/**",
+          "src-tauri/src/services/**",
+          "src-tauri/src/domain/**",
+          "src-tauri/src/storage/**",
+          "src-tauri/migrations/**",
+          "src/lib/types.ts",
+          "src/test/**",
+          "docs/dev-plan/packages/pkg-22-ai-canvas-chat/**",
+          "docs/product/whiteboard-drawing-and-ai.md"
+        ],
+        "forbiddenPaths": [
+          "src-tauri/src/platform/**",
+          "src/features/quick-switch/**"
+        ],
+        "allowedChanges": [
+          "当前工作区对话面板，手动发送",
+          "上下文：选中 / 视口 / 全画布，含卡片正文、连线和 scene 元素摘要",
+          "模型可返回 markdown 卡片和 scene element upsert/delete",
+          "写回的对象可删即可撤销",
+          "复用 get_ai_settings / update_ai_settings",
+          "未配置 provider 时指引设置"
+        ],
+        "forbiddenChanges": [
+          "输入时自动请求模型",
+          "读取外部软件、预览窗口内部文本",
+          "覆盖用户未确认的原卡片",
+          "密钥写入画布或日志",
+          "实现在线协作或插件市场"
+        ]
+      },
+      "deliverables": [
+        {
+          "id": "d22-chat",
+          "name": "对话面板",
+          "description": "绑定当前工作区。能看见本次用了哪些卡片/图形。Esc 或按钮关闭。"
+        },
+        {
+          "id": "d22-writeback",
+          "name": "讨论结果写回白板",
+          "description": "新卡片进 canvas_nodes；新图形进 scene_json。用户可删。"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "s22-01",
+          "title": "对话消息与范围",
+          "status": "pending",
+          "doneWhen": "消息属当前工作区；范围可选选中 / 视口 / 全画布。"
+        },
+        {
+          "id": "s22-02",
+          "title": "上下文含 scene",
+          "status": "pending",
+          "doneWhen": "发给模型的包含卡片、连线和图形摘要，不含密钥和外部软件内容。"
+        },
+        {
+          "id": "s22-03",
+          "title": "写回卡片与图形",
+          "status": "pending",
+          "doneWhen": "模型 upsert 的 elements 出现在画图层；非法 element 被丢弃并说明。"
+        },
+        {
+          "id": "s22-04",
+          "title": "测试",
+          "status": "pending",
+          "doneWhen": "未配置 provider、范围过滤、写回可删、工作区隔离有测试。可用 mock provider。"
+        }
+      ],
+      "commands": [
+        "chat_canvas",
+        "get_ai_settings",
+        "update_ai_settings"
+      ],
+      "acceptance": [
+        "默认不自动请求",
+        "对话只基于白板",
+        "AI 画的箭头能删",
+        "密钥不进画布"
+      ],
+      "docs": {
+        "json": "docs/dev-plan/packages/pkg-22-ai-canvas-chat/pkg.json",
+        "markdown": "docs/dev-plan/packages/pkg-22-ai-canvas-chat/README.md",
+        "product": "docs/product/whiteboard-drawing-and-ai.md"
       }
     }
   ],

@@ -7,17 +7,35 @@ import {
   cryptoRandomId,
   DEFAULT_IMAGE_HEIGHT,
   DEFAULT_IMAGE_WIDTH,
+  DEFAULT_MARKDOWN_FONT_SIZE,
   DEFAULT_MARKDOWN_HEIGHT,
   DEFAULT_MARKDOWN_WIDTH,
+  isMarkdownFontSize,
+  mergeMarkdownFontSize,
   productNodeFromInput,
   toCanvasEdgeInput,
   toCanvasNodeInput,
   toPersistedCanvasEdge,
   toPersistedCanvasNode,
+  type MarkdownFontSize,
 } from '@/features/canvas/persist';
+import {
+  emptyCanvasScene,
+  normalizeCanvasScene,
+  normalizeCanvasSceneElement,
+  sceneHasContent,
+} from '@/features/canvas/scene';
 import { assertImageSize, blobToBase64, isImageFile } from '@/features/canvas/file';
 import { userMessageForError } from '@/lib/errors';
-import type { CanvasEdge, CanvasNode, CanvasSaveStatus, CommandError } from '@/lib/types';
+import type {
+  CanvasDrawingTool,
+  CanvasEdge,
+  CanvasNode,
+  CanvasSaveStatus,
+  CanvasScene,
+  CanvasSceneElement,
+  CommandError,
+} from '@/lib/types';
 
 export const SAVE_DEBOUNCE_MS = 600;
 
@@ -25,6 +43,9 @@ export type CanvasStoreData = {
   workspaceId: string | null;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
+  scene: CanvasScene;
+  drawingTool: CanvasDrawingTool;
+  selectedElementIds: string[];
   assetUrls: Record<string, string>;
   missingAssets: Record<string, true>;
   saveStatus: CanvasSaveStatus;
@@ -38,10 +59,18 @@ export type CanvasStore = CanvasStoreData & {
   loadCanvas: (workspaceId: string) => Promise<void>;
   clearCanvas: () => void;
   createMarkdownCard: (position?: { x: number; y: number }) => CanvasNode | null;
-  updateNodeFields: (nodeId: string, patch: Partial<Pick<CanvasNode, 'title' | 'contentMarkdown' | 'color'>>) => void;
+  updateNodeFields: (
+    nodeId: string,
+    patch: Partial<Pick<CanvasNode, 'title' | 'contentMarkdown' | 'color' | 'metadataJson'>>,
+  ) => void;
+  setMarkdownFontSize: (nodeId: string, size: MarkdownFontSize | number) => void;
   deleteNodes: (nodeIds: string[]) => void;
   applyFlowSnapshot: (flowNodes: Node[], flowEdges?: Edge[]) => void;
   applyFlowEdges: (flowEdges: Edge[]) => void;
+  setDrawingTool: (tool: CanvasDrawingTool) => void;
+  upsertSceneElements: (elements: CanvasSceneElement[]) => void;
+  removeSceneElements: (elementIds: string[]) => void;
+  setSelectedElementIds: (elementIds: string[]) => void;
   addImageFromFile: (
     file: File,
     source: 'clipboard' | 'drag_drop',
@@ -57,6 +86,9 @@ export const initialCanvasStoreData: CanvasStoreData = {
   workspaceId: null,
   nodes: [],
   edges: [],
+  scene: emptyCanvasScene(),
+  drawingTool: 'select',
+  selectedElementIds: [],
   assetUrls: {},
   missingAssets: {},
   saveStatus: 'idle',
@@ -65,6 +97,10 @@ export const initialCanvasStoreData: CanvasStoreData = {
   canvasError: null,
   dirty: false,
 };
+
+function canvasHasContent(nodes: CanvasNode[], edges: CanvasEdge[], scene: CanvasScene): boolean {
+  return nodes.length > 0 || edges.length > 0 || sceneHasContent(scene);
+}
 
 let canvasRequestSeq = 0;
 let dirtyRevision = 0;
@@ -131,6 +167,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       workspaceId,
       nodes: [],
       edges: [],
+      scene: emptyCanvasScene(),
+      drawingTool: 'select',
+      selectedElementIds: [],
       assetUrls: {},
       missingAssets: {},
       canvasLoading: true,
@@ -149,13 +188,16 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         get().scheduleSave();
         return;
       }
+      const scene = normalizeCanvasScene(canvas.scene);
       set({
         workspaceId: canvas.workspaceId,
         nodes: canvas.nodes,
         edges: canvas.edges,
+        scene,
+        selectedElementIds: [],
         canvasLoading: false,
         lastSavedAt: canvas.updatedAt ?? null,
-        saveStatus: canvas.nodes.length > 0 || canvas.edges.length > 0 ? 'saved' : 'idle',
+        saveStatus: canvasHasContent(canvas.nodes, canvas.edges, scene) ? 'saved' : 'idle',
         dirty: false,
       });
       void hydrateAssetUrls(canvas.workspaceId, canvas.nodes, set, get);
@@ -228,6 +270,34 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     get().scheduleSave();
   },
 
+  setMarkdownFontSize(nodeId, size) {
+    const state = get();
+    if (!canMutateCanvas(state)) {
+      return;
+    }
+    const workspaceId = state.workspaceId;
+    const fontSize = isMarkdownFontSize(size) ? size : DEFAULT_MARKDOWN_FONT_SIZE;
+    const now = new Date().toISOString();
+    let changed = false;
+    const nodes = get().nodes.map((node) => {
+      if (node.id !== nodeId || node.workspaceId !== workspaceId || node.nodeType !== 'markdown') {
+        return node;
+      }
+      const metadataJson = mergeMarkdownFontSize(node.metadataJson, fontSize);
+      if (node.metadataJson === metadataJson) {
+        return node;
+      }
+      changed = true;
+      return { ...node, metadataJson, updatedAt: now };
+    });
+    if (!changed) {
+      return;
+    }
+    set({ nodes });
+    markDirty(set);
+    get().scheduleSave();
+  },
+
   deleteNodes(nodeIds) {
     const state = get();
     if (!canMutateCanvas(state) || nodeIds.length === 0) {
@@ -285,6 +355,57 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     set({ nodes, edges });
     markDirty(set);
     get().scheduleSave();
+  },
+
+  setDrawingTool(tool) {
+    set({
+      drawingTool: tool,
+      selectedElementIds: tool === 'select' ? get().selectedElementIds : [],
+    });
+  },
+
+  upsertSceneElements(elements) {
+    const state = get();
+    if (!canMutateCanvas(state) || elements.length === 0) {
+      return;
+    }
+    const incoming = elements
+      .map((element) => normalizeCanvasSceneElement(element))
+      .filter((element): element is CanvasSceneElement => element !== null);
+    if (incoming.length === 0) {
+      return;
+    }
+    const next = new Map(get().scene.elements.map((element) => [element.id, element]));
+    for (const element of incoming) {
+      next.set(element.id, element);
+    }
+    set({
+      scene: { version: 1, elements: [...next.values()] },
+    });
+    markDirty(set);
+    get().scheduleSave();
+  },
+
+  removeSceneElements(elementIds) {
+    const state = get();
+    if (!canMutateCanvas(state) || elementIds.length === 0) {
+      return;
+    }
+    const remove = new Set(elementIds);
+    const elements = get().scene.elements.filter((element) => !remove.has(element.id));
+    if (elements.length === get().scene.elements.length) {
+      return;
+    }
+    set({
+      scene: { version: 1, elements },
+      selectedElementIds: get().selectedElementIds.filter((id) => !remove.has(id)),
+    });
+    markDirty(set);
+    get().scheduleSave();
+  },
+
+  setSelectedElementIds(elementIds) {
+    set({ selectedElementIds: [...new Set(elementIds)] });
   },
 
   applyFlowEdges(flowEdges) {
@@ -394,10 +515,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     savingRevision = revision;
     const nodes = get().nodes.filter((node) => node.workspaceId === workspaceId).map(toCanvasNodeInput);
     const edges = get().edges.filter((edge) => edge.workspaceId === workspaceId).map(toCanvasEdgeInput);
+    const scene = normalizeCanvasScene(get().scene);
     set({ saveStatus: 'saving', canvasError: null });
 
     try {
-      const canvas = await canvasApi.saveCanvas({ workspaceId, nodes, edges });
+      const canvas = await canvasApi.saveCanvas({ workspaceId, nodes, edges, scene });
       if (get().workspaceId !== workspaceId) {
         return;
       }
@@ -416,6 +538,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         dirty: false,
         nodes: canvas.nodes,
         edges: canvas.edges,
+        scene: normalizeCanvasScene(canvas.scene ?? scene),
       });
     } catch (error) {
       if (get().workspaceId !== workspaceId) {

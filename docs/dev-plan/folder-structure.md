@@ -70,11 +70,11 @@ src/
     workspaces/         工作区列表、创建、删除
     apps/               软件库、添加、标签、卡片
     windows/            窗口状态展示（不写 HWND）
-    canvas/             白板
+    canvas/             白板（卡片、连线、pkg-21 画图层）
     settings/           pkg-07 起：全局设置与快捷键
     quick-switch/       pkg-08 起：快速切换面板
     activity-log/       pkg-13 起：可选窗口活动
-    agent/              pkg-15 起：费曼学习
+    agent/              pkg-15 费曼；pkg-22 白板对话
   lib/                  跨 feature 类型和工具
   styles/               全局样式入口
   test/                 Vitest 辅助
@@ -86,7 +86,7 @@ src/
 | `features/workspaces/` | 侧栏、创建/删除弹窗、workspace store | 软件启动、白板保存 |
 | `features/apps/` | 添加弹窗、标签、卡片、app store | 平台扫描、画布 |
 | `features/windows/` | 窗口状态文案、重开入口 | Win32、HWND |
-| `features/canvas/` | 画布、Markdown/图片卡片 | 软件启动、工作区删除 |
+| `features/canvas/` | 画布、Markdown/图片卡片、画图 scene | 软件启动、工作区删除、LLM 密钥 |
 | `features/api/` | `invoke` 封装 | UI 组件 |
 | `components/ui/` | 按钮、对话框等 | 任何业务 store |
 | `lib/` | 类型、`cn`、错误码映射 | 页面 |

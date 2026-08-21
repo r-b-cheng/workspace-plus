@@ -1,0 +1,104 @@
+{
+  "id": "pkg-22-ai-canvas-chat",
+  "seq": 22,
+  "title": "白板对话：读上下文、讨论、往白板上画",
+  "status": "pending",
+  "dependsOn": [
+    "pkg-14-ai-canvas-summary",
+    "pkg-21-whiteboard-drawing"
+  ],
+  "parallelWith": [],
+  "ownerHint": "白板 Canvas 智能体 / 数据与本地存储智能体",
+  "goal": "用户在当前工作区和 AI 对话。模型只读白板（卡片、连线、scene），可以回复、追问，并把新卡片或图形写回白板。默认手动发送，不读外部软件。",
+  "changeScope": {
+    "summary": "对话面板 + 画布上下文（含 scene）+ 可撤销的写回（新卡片 / scene upsert）。复用 pkg-14 的 provider。费曼模式仍以 pkg-15 为准，本包不重做费曼提示词。",
+    "allowedPaths": [
+      "src/features/agent/**",
+      "src/features/canvas/**",
+      "src/features/settings/**",
+      "src/features/api/**",
+      "src-tauri/src/commands/**",
+      "src-tauri/src/services/**",
+      "src-tauri/src/domain/**",
+      "src-tauri/src/storage/**",
+      "src-tauri/migrations/**",
+      "src/lib/types.ts",
+      "src/test/**",
+      "docs/dev-plan/packages/pkg-22-ai-canvas-chat/**",
+      "docs/product/whiteboard-drawing-and-ai.md"
+    ],
+    "forbiddenPaths": [
+      "src-tauri/src/platform/**",
+      "src/features/quick-switch/**"
+    ],
+    "allowedChanges": [
+      "当前工作区对话面板，手动发送",
+      "上下文：选中 / 视口 / 全画布，含卡片正文、连线和 scene 元素摘要",
+      "模型可返回 markdown 卡片和 scene element upsert/delete",
+      "写回的对象可删即可撤销",
+      "复用 get_ai_settings / update_ai_settings",
+      "未配置 provider 时指引设置"
+    ],
+    "forbiddenChanges": [
+      "输入时自动请求模型",
+      "读取外部软件、预览窗口内部文本",
+      "覆盖用户未确认的原卡片",
+      "密钥写入画布或日志",
+      "实现在线协作或插件市场"
+    ]
+  },
+  "deliverables": [
+    {
+      "id": "d22-chat",
+      "name": "对话面板",
+      "description": "绑定当前工作区。能看见本次用了哪些卡片/图形。Esc 或按钮关闭。"
+    },
+    {
+      "id": "d22-writeback",
+      "name": "讨论结果写回白板",
+      "description": "新卡片进 canvas_nodes；新图形进 scene_json。用户可删。"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s22-01",
+      "title": "对话消息与范围",
+      "status": "pending",
+      "doneWhen": "消息属当前工作区；范围可选选中 / 视口 / 全画布。"
+    },
+    {
+      "id": "s22-02",
+      "title": "上下文含 scene",
+      "status": "pending",
+      "doneWhen": "发给模型的包含卡片、连线和图形摘要，不含密钥和外部软件内容。"
+    },
+    {
+      "id": "s22-03",
+      "title": "写回卡片与图形",
+      "status": "pending",
+      "doneWhen": "模型 upsert 的 elements 出现在画图层；非法 element 被丢弃并说明。"
+    },
+    {
+      "id": "s22-04",
+      "title": "测试",
+      "status": "pending",
+      "doneWhen": "未配置 provider、范围过滤、写回可删、工作区隔离有测试。可用 mock provider。"
+    }
+  ],
+  "commands": [
+    "chat_canvas",
+    "get_ai_settings",
+    "update_ai_settings"
+  ],
+  "acceptance": [
+    "默认不自动请求",
+    "对话只基于白板",
+    "AI 画的箭头能删",
+    "密钥不进画布"
+  ],
+  "docs": {
+    "json": "docs/dev-plan/packages/pkg-22-ai-canvas-chat/pkg.json",
+    "markdown": "docs/dev-plan/packages/pkg-22-ai-canvas-chat/README.md",
+    "product": "docs/product/whiteboard-drawing-and-ai.md"
+  }
+}

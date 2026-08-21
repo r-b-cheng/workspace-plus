@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { useWorkspaceAppStore } from '@/features/apps/store/workspace-app-store';
+import {
+  currentEmbedPreviewSeq,
+  useWorkspaceAppStore,
+} from '@/features/apps/store/workspace-app-store';
 import { EXIT_EMBED_PREVIEW_LABEL } from '@/features/windows/embed-copy';
 import { embedHostBoundsFromElement } from '@/features/windows/embed-host';
 
@@ -26,9 +29,13 @@ export function EmbedPreviewHost({ active, pending = false, onExit }: EmbedPrevi
     }
 
     let timer = 0;
+    const seqAtStart = currentEmbedPreviewSeq();
     const observer = new ResizeObserver(() => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
+        if (currentEmbedPreviewSeq() !== seqAtStart) {
+          return;
+        }
         const state = useWorkspaceAppStore.getState();
         if (!state.embeddedWorkspaceAppId || state.pendingEmbedWorkspaceAppId) {
           return;
@@ -81,7 +88,7 @@ export function EmbedPreviewHost({ active, pending = false, onExit }: EmbedPrevi
         ref={surfaceRef}
         data-embed-host-surface
         data-testid="embed-preview-host-surface"
-        className="flex min-h-0 flex-1 items-center justify-center rounded-[10px] border border-dashed border-border bg-muted/30"
+        className="pointer-events-none flex min-h-0 flex-1 items-center justify-center rounded-[10px] border border-dashed border-border bg-muted/30"
       >
         {pending ? <span className="text-sm text-muted-foreground">正在放入窗口…</span> : null}
       </div>

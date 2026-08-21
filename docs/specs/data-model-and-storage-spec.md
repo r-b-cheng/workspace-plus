@@ -79,7 +79,7 @@ CREATE INDEX idx_workspaces_last_opened
   WHERE deleted_at IS NULL;
 ```
 
-删除工作区时默认软删除 `workspaces.deleted_at`，并级联软删除该工作区下的 `workspace_apps`、`native_windows`、`canvas_nodes`、`canvas_edges`、`activity_entries`。这里的“级联”建议由 Service 层事务完成，而不是完全依赖 SQLite `ON DELETE CASCADE`，因为软删除需要写入时间戳，并且不能误删全局 `installed_apps` 或真实资源文件。
+删除工作区时默认软删除 `workspaces.deleted_at`，并级联软删除该工作区下的 `workspace_apps`、`native_windows`、`canvas_nodes`、`canvas_edges`、`canvas_scenes`、`activity_entries`。这里的“级联”建议由 Service 层事务完成，而不是完全依赖 SQLite `ON DELETE CASCADE`，因为软删除需要写入时间戳，并且不能误删全局 `installed_apps` 或真实资源文件。
 
 ## 4. installed_apps
 
@@ -302,6 +302,22 @@ CREATE UNIQUE INDEX idx_canvas_edges_unique_active
 
 删除节点时软删除节点，同时软删除以它为 source 或 target 的边。若节点引用资源，不立即删除资源文件；资源清理任务需要确认没有任何未删除节点或操作记录引用该 `asset_id`。
 
+Markdown 卡片的整卡字号放在该节点 `metadata_json`，例如 `{"fontSize":16}`，不新增列。
+
+手绘与形状不进 `canvas_nodes`。每个工作区另有一份画图 scene，P2 的 AI 也读写这份 JSON。规格见 `docs/product/whiteboard-drawing-and-ai.md`。
+
+```sql
+CREATE TABLE canvas_scenes (
+  workspace_id TEXT PRIMARY KEY,
+  scene_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+);
+```
+
+`scene_json` 只存产品元素（`path` / `arrow` / `rect` / `ellipse` / `text` 和世界坐标），不存选中、hover、工具状态。删除工作区时软删除对应 scene。本表由 `003_canvas_scenes.sql` 落地。
+
 ## 8. activity_entries
 
 `activity_entries` 是工作区操作记录时间线，默认由用户手动创建，或由产品在用户明确操作时记录轻量事件，例如“通过本产品启动了 VS Code”。它不能被设计成自动监听外部软件内部行为的审计日志。
@@ -492,6 +508,9 @@ SettingsRepository
 
 002_indexes.sql
   所有查询索引和唯一约束
+
+003_canvas_scenes.sql
+  canvas_scenes
 ```
 
 也可以把 MVP schema 放在一个初始迁移文件里，但后续变更必须追加迁移，不直接修改已经发布过的 migration。只要应用进入真实使用，数据库就是用户数据的一部分，不能像普通开发缓存一样随意删库重建。

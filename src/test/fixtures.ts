@@ -1,11 +1,21 @@
 import type {
   Canvas,
+  CanvasEdge,
   CanvasNode,
+  CanvasScene,
   InstalledApp,
   Workspace,
   WorkspaceApp,
   WorkspaceAppWindow,
 } from '@/lib/types';
+
+export function mockCanvasScene(overrides: Partial<CanvasScene> = {}): CanvasScene {
+  return {
+    version: 1,
+    elements: [],
+    ...overrides,
+  };
+}
 
 export function mockWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -77,12 +87,27 @@ export function mockCanvasNode(overrides: Partial<CanvasNode> = {}): CanvasNode 
   };
 }
 
+export function mockCanvasEdge(overrides: Partial<CanvasEdge> = {}): CanvasEdge {
+  return {
+    id: 'e-1',
+    workspaceId: 'ws-1',
+    sourceNodeId: 'n-1',
+    targetNodeId: 'n-2',
+    edgeType: 'smoothstep',
+    metadataJson: '{"markerEnd":"arrowclosed"}',
+    createdAt: '2026-08-20T10:00:00Z',
+    updatedAt: '2026-08-20T10:00:00Z',
+    ...overrides,
+  };
+}
+
 export function mockCanvas(overrides: Partial<Canvas> = {}): Canvas {
   const workspaceId = overrides.workspaceId ?? 'ws-1';
   return {
     workspaceId,
     nodes: overrides.nodes ?? [],
     edges: overrides.edges ?? [],
+    scene: overrides.scene ?? mockCanvasScene(),
     updatedAt: '2026-08-20T10:00:00Z',
     ...overrides,
   };

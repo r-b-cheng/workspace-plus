@@ -236,16 +236,18 @@ export function WorkspaceShell() {
       />
 
       <section
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-[18px] overflow-hidden bg-card p-6"
+        className="@container flex min-h-0 min-w-0 flex-1 flex-col gap-[18px] overflow-hidden bg-card p-6"
         data-testid="workspace-middle-pane"
         data-workspace-view={workspaceView}
       >
         {workspaceError ? (
-          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{workspaceError.message}</p>
+          <p className="min-w-0 break-words rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {workspaceError.message}
+          </p>
         ) : null}
         {appError ? (
           <p
-            className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            className="min-w-0 break-words rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
             data-testid={isWindowClosedError(appError) ? 'window-closed-banner' : 'app-error-banner'}
           >
             {appError.message}
@@ -268,7 +270,7 @@ export function WorkspaceShell() {
           </>
         ) : (
           <>
-            <div className="flex shrink-0 flex-wrap items-center gap-3.5 border-b border-border pb-[18px]">
+            <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-3.5 border-b border-border pb-[18px]">
               <div className="min-w-0 flex-1 [&_header]:border-b-0 [&_header]:pb-0">
                 <CurrentWorkspaceHeader
                   workspace={selectedWorkspace}
@@ -298,22 +300,20 @@ export function WorkspaceShell() {
                 onExit={() => void releaseEmbeddedWindow()}
               />
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto">
-                <WorkspaceOverview
-                  workspace={selectedWorkspace}
-                  hasApps={workspaceApps.length > 0}
-                  loading={workspaceAppsLoading}
-                  onAddApp={handleAddApp}
-                />
-                <WorkspaceAppCardGrid
-                  apps={visibleApps}
-                  pendingAppIds={pendingWorkspaceAppIds}
-                  onActivate={(app) => void activateWorkspaceApp(app)}
-                  onReopen={(app) => void reopenWorkspaceApp(app)}
-                  onRemove={(app) => {
-                    void removeWorkspaceApp(app.id).then(() => syncAppCount(app.workspaceId));
-                  }}
-                />
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[18px] overflow-y-auto overflow-x-hidden">
+                {workspaceApps.length === 0 ? (
+                  <WorkspaceOverview loading={workspaceAppsLoading} onAddApp={handleAddApp} />
+                ) : (
+                  <WorkspaceAppCardGrid
+                    apps={visibleApps}
+                    pendingAppIds={pendingWorkspaceAppIds}
+                    onActivate={(app) => void activateWorkspaceApp(app)}
+                    onReopen={(app) => void reopenWorkspaceApp(app)}
+                    onRemove={(app) => {
+                      void removeWorkspaceApp(app.id).then(() => syncAppCount(app.workspaceId));
+                    }}
+                  />
+                )}
               </div>
             )}
           </>

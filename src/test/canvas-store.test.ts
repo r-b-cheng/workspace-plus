@@ -1,10 +1,11 @@
+import { MarkerType } from '@xyflow/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { canvasApi } from '@/features/api/canvas-api';
 import { AppApiError } from '@/features/api/tauri-client';
 import { useCanvasStore } from '@/features/canvas/store/canvas-store';
 import type { Canvas } from '@/lib/types';
-import { mockCanvas, mockCanvasNode } from '@/test/fixtures';
+import { mockCanvas, mockCanvasEdge, mockCanvasNode } from '@/test/fixtures';
 
 vi.mock('@/features/api/canvas-api', () => ({
   canvasApi: {
@@ -129,5 +130,145 @@ describe('canvas store 工作区隔离与保存重试', () => {
     expect(useCanvasStore.getState().saveStatus).toBe('saved');
     expect(useCanvasStore.getState().lastSavedAt).toBe('2026-08-20T12:00:00Z');
     expect(canvasApi.saveCanvas).toHaveBeenCalledTimes(2);
+  });
+
+  it('applyFlowEdges 增加一条边并会 saveCanvas', async () => {
+    const nodeA = mockCanvasNode({ id: 'n-1', workspaceId: 'ws-1' });
+    const nodeB = mockCanvasNode({ id: 'n-2', workspaceId: 'ws-1', x: 360 });
+    vi.mocked(canvasApi.getCanvas).mockResolvedValue(
+      mockCanvas({ workspaceId: 'ws-1', nodes: [nodeA, nodeB], edges: [] }),
+    );
+    vi.mocked(canvasApi.saveCanvas).mockResolvedValue(
+      mockCanvas({
+        workspaceId: 'ws-1',
+        nodes: [nodeA, nodeB],
+        edges: [
+          mockCanvasEdge({
+            id: 'e-new',
+            workspaceId: 'ws-1',
+            sourceNodeId: 'n-1',
+            targetNodeId: 'n-2',
+          }),
+        ],
+        updatedAt: '2026-08-21T06:00:00Z',
+      }),
+    );
+
+    await useCanvasStore.getState().loadCanvas('ws-1');
+    useCanvasStore.getState().applyFlowEdges([
+      {
+        id: 'e-new',
+        source: 'n-1',
+        target: 'n-2',
+        sourceHandle: 'right',
+        targetHandle: 'left',
+        type: 'smoothstep',
+        markerEnd: { type: MarkerType.ArrowClosed },
+      },
+    ]);
+
+    expect(useCanvasStore.getState().edges).toHaveLength(1);
+    expect(useCanvasStore.getState().edges[0]).toMatchObject({
+      id: 'e-new',
+      workspaceId: 'ws-1',
+      sourceNodeId: 'n-1',
+      targetNodeId: 'n-2',
+      edgeType: 'smoothstep',
+    });
+    expect(JSON.parse(useCanvasStore.getState().edges[0]?.metadataJson ?? '{}')).toEqual({
+      markerEnd: 'arrowclosed',
+      sourceHandle: 'right',
+      targetHandle: 'left',
+    });
+    expect(useCanvasStore.getState().dirty).toBe(true);
+
+    await useCanvasStore.getState().flushSave();
+    expect(canvasApi.saveCanvas).toHaveBeenCalledTimes(1);
+    expect(canvasApi.saveCanvas).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      nodes: expect.any(Array),
+      edges: [
+        expect.objectContaining({
+          id: 'e-new',
+          sourceNodeId: 'n-1',
+          targetNodeId: 'n-2',
+          edgeType: 'smoothstep',
+          metadataJson: '{"markerEnd":"arrowclosed","sourceHandle":"right","targetHandle":"left"}',
+        }),
+      ],
+      scene: { version: 1, elements: [] },
+    });
+    expect(useCanvasStore.getState().saveStatus).toBe('saved');
+  });
+
+  it('setMarkdownFontSize 合并已有 metadata 并会 saveCanvas', async () => {
+    const node = mockCanvasNode({
+      id: 'n-1',
+      workspaceId: 'ws-1',
+      metadataJson: '{"pinned":true}',
+    });
+    vi.mocked(canvasApi.getCanvas).mockResolvedValue(mockCanvas({ workspaceId: 'ws-1', nodes: [node], edges: [] }));
+    vi.mocked(canvasApi.saveCanvas).mockResolvedValue(
+      mockCanvas({
+        workspaceId: 'ws-1',
+        nodes: [
+          mockCanvasNode({
+            id: 'n-1',
+            workspaceId: 'ws-1',
+            metadataJson: '{"pinned":true,"fontSize":16}',
+          }),
+        ],
+        updatedAt: '2026-08-21T07:00:00Z',
+      }),
+    );
+
+    await useCanvasStore.getState().loadCanvas('ws-1');
+    useCanvasStore.getState().setMarkdownFontSize('n-1', 16);
+
+    expect(JSON.parse(useCanvasStore.getState().nodes[0]?.metadataJson ?? '{}')).toEqual({
+      pinned: true,
+      fontSize: 16,
+    });
+    expect(useCanvasStore.getState().dirty).toBe(true);
+
+    await useCanvasStore.getState().flushSave();
+    expect(canvasApi.saveCanvas).toHaveBeenCalledTimes(1);
+    const payload = vi.mocked(canvasApi.saveCanvas).mock.calls[0]?.[0];
+    expect(payload?.workspaceId).toBe('ws-1');
+    expect(JSON.parse(payload?.nodes[0]?.metadataJson ?? '{}')).toEqual({
+      pinned: true,
+      fontSize: 16,
+    });
+    expect(useCanvasStore.getState().saveStatus).toBe('saved');
+  });
+
+  it('setMarkdownFontSize 非法字号回落 13，不改图片卡片', async () => {
+    const markdown = mockCanvasNode({
+      id: 'n-md',
+      workspaceId: 'ws-1',
+      metadataJson: '{"fontSize":20,"note":"keep"}',
+    });
+    const image = mockCanvasNode({
+      id: 'n-img',
+      workspaceId: 'ws-1',
+      nodeType: 'image',
+      metadataJson: '{"alt":"cover"}',
+    });
+    vi.mocked(canvasApi.getCanvas).mockResolvedValue(
+      mockCanvas({ workspaceId: 'ws-1', nodes: [markdown, image], edges: [] }),
+    );
+
+    await useCanvasStore.getState().loadCanvas('ws-1');
+    useCanvasStore.getState().setMarkdownFontSize('n-md', 99);
+    useCanvasStore.getState().setMarkdownFontSize('n-img', 24);
+
+    const nodes = useCanvasStore.getState().nodes;
+    expect(JSON.parse(nodes.find((node) => node.id === 'n-md')?.metadataJson ?? '{}')).toEqual({
+      fontSize: 13,
+      note: 'keep',
+    });
+    expect(JSON.parse(nodes.find((node) => node.id === 'n-img')?.metadataJson ?? '{}')).toEqual({
+      alt: 'cover',
+    });
   });
 });

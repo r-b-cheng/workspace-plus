@@ -35,8 +35,10 @@
 | [pkg-16](./packages/pkg-16-device-sync/) | 工作区导出导入 | P2 | 09 |
 | [pkg-17](./packages/pkg-17-collaboration/) | 只读分享与评论 | P2 | 16 |
 | [pkg-18](./packages/pkg-18-plugin-marketplace/) | 本机插件加载 | P2 | 09 |
+| [pkg-21](./packages/pkg-21-whiteboard-drawing/) | 白板画图层 | P2 | 09 |
+| [pkg-22](./packages/pkg-22-ai-canvas-chat/) | 白板对话（读、讨论、画） | P2 | 14、21 |
 
-P0 剩余项（07 / 08 / 09）与 pkg-10 / 11 / 12 / 19 / 20 已完成。按用户决定跳过 pkg-13 至 pkg-18。一次只做一个包。
+P0 剩余项（07 / 08 / 09）与 pkg-10 / 11 / 12 / 19 / 20 已完成。按用户决定跳过 pkg-13 至 pkg-18。白板画图与对话是用户确认的 P2 最终形态，规格见 `docs/product/whiteboard-drawing-and-ai.md`。一次只做一个包。
 
 ## 这一轮做什么、不做什么
 
@@ -46,7 +48,8 @@ P0 剩余项（07 / 08 / 09）与 pkg-10 / 11 / 12 / 19 / 20 已完成。按用�
 
 - 点标签默认切系统窗口；预览从应用栏一键进入，失败回退到真实窗口
 - 活动观察默认关，只记窗口标题，不钩键盘
-- Agent 只看画布，默认手动触发
+- Agent 只看画布，默认手动触发；最终形态是对话，并能往 scene / 卡片上落笔
+- 画图是 xyflow 旁边的 scene JSON，不换主白板
 - 同步先做导出导入，协作先做只读分享，插件先做本机加载
 
 本轮不做 P1：窗口截图预览、别名编辑页、待办卡片、文件夹/URL/命令、Windows 安装包。

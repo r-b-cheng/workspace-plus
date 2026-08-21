@@ -102,9 +102,8 @@ describe('工作区软件卡片窗口列表', () => {
     expect(windowApi.focusNativeWindow).not.toHaveBeenCalled();
   });
 
-  it('已关闭项标明关闭，点它不会假装还能聚焦', async () => {
+  it('已关闭窗口不出现在列表里，点列表不会聚焦关闭项', async () => {
     const user = userEvent.setup();
-    const onReopen = vi.fn();
     vi.mocked(windowApi.listWorkspaceAppWindows).mockResolvedValue([
       first,
       mockWorkspaceAppWindow({
@@ -118,18 +117,47 @@ describe('工作区软件卡片窗口列表', () => {
       <WorkspaceAppCard
         app={mockWorkspaceApp()}
         onActivate={vi.fn()}
-        onReopen={onReopen}
+        onReopen={vi.fn()}
         onRemove={vi.fn()}
       />,
     );
 
     await user.click(screen.getByTestId('workspace-app-windows-toggle'));
-    const closed = (await screen.findAllByTestId('workspace-app-window-item')).find(
-      (item) => item.getAttribute('data-window-status') === 'closed',
+    const items = await screen.findAllByTestId('workspace-app-window-item');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent('Gmail - Google Chrome');
+    expect(items[0]).toHaveAttribute('data-window-status', 'running');
+    expect(screen.queryByText('Old tab')).not.toBeInTheDocument();
+    expect(screen.queryByText('已关闭')).not.toBeInTheDocument();
+
+    await user.click(items[0]);
+    expect(windowApi.focusNativeWindow).toHaveBeenCalledWith({ windowId: 'nw-1' });
+    expect(windowApi.focusNativeWindow).not.toHaveBeenCalledWith({ windowId: 'nw-closed' });
+  });
+
+  it('展开后若没有运行中窗口，显示空提示', async () => {
+    const user = userEvent.setup();
+    vi.mocked(windowApi.listWorkspaceAppWindows).mockResolvedValue([
+      mockWorkspaceAppWindow({
+        id: 'nw-closed',
+        title: 'Old tab',
+        status: 'closed',
+      }),
+    ]);
+
+    render(
+      <WorkspaceAppCard
+        app={mockWorkspaceApp()}
+        onActivate={vi.fn()}
+        onReopen={vi.fn()}
+        onRemove={vi.fn()}
+      />,
     );
-    expect(closed).toHaveTextContent('已关闭');
-    expect(closed).toHaveTextContent('Old tab');
-    await user.click(closed!);
+
+    await user.click(screen.getByTestId('workspace-app-windows-toggle'));
+    expect(await screen.findByText('没有打开的窗口')).toBeInTheDocument();
+    expect(screen.queryByTestId('workspace-app-window-item')).not.toBeInTheDocument();
+    expect(screen.queryByText('Old tab')).not.toBeInTheDocument();
     expect(windowApi.focusNativeWindow).not.toHaveBeenCalled();
   });
 });

@@ -10,9 +10,10 @@ use rusqlite::Connection;
 
 use crate::domain::{
     normalize_shortcut, AppSettings, Asset, Canvas, CanvasAssetContent, CanvasEdge,
-    CanvasEdgeInput, CanvasNode, CanvasNodeInput, DeleteWorkspaceResult, EmbedWorkspaceAppResult,
-    HostBounds, InstalledApp, ReleaseEmbeddedWindowResult, RemoveWorkspaceAppResult, Workspace,
-    WorkspaceApp, WorkspaceAppWindow, DEFAULT_QUICK_SWITCH_SHORTCUT, REGISTRATION_UNREGISTERED,
+    CanvasEdgeInput, CanvasNode, CanvasNodeInput, CanvasScene, DeleteWorkspaceResult,
+    EmbedWorkspaceAppResult, HostBounds, InstalledApp, ReleaseEmbeddedWindowResult,
+    RemoveWorkspaceAppResult, Workspace, WorkspaceApp, WorkspaceAppWindow,
+    DEFAULT_QUICK_SWITCH_SHORTCUT, REGISTRATION_UNREGISTERED,
 };
 use crate::errors::AppError;
 use crate::platform::{
@@ -66,6 +67,8 @@ struct EmbedSession {
     original_style: i32,
     original_ex_style: i32,
     original_parent: isize,
+    #[cfg(windows)]
+    placement: crate::platform::windows::embed::SavedWindowPlacement,
     preview_seq: u64,
 }
 
@@ -76,6 +79,7 @@ pub struct AppService {
     paths: AppPaths,
     shortcut_registration: Mutex<ShortcutRegistrationState>,
     embed_session: Mutex<Option<EmbedSession>>,
+    last_released_preview_seq: Mutex<u64>,
     embed_ops: Mutex<()>,
     window_change_sink: Mutex<Option<Arc<dyn WindowChangeSink>>>,
 }
@@ -91,6 +95,7 @@ impl AppService {
             paths,
             shortcut_registration: Mutex::new(ShortcutRegistrationState::default()),
             embed_session: Mutex::new(None),
+            last_released_preview_seq: Mutex::new(0),
             embed_ops: Mutex::new(()),
             window_change_sink: Mutex::new(None),
         })
@@ -136,6 +141,12 @@ impl AppService {
         self.embed_session
             .lock()
             .map_err(|_| AppError::internal("embed session lock is poisoned"))
+    }
+
+    fn lock_last_released_preview_seq(&self) -> Result<MutexGuard<'_, u64>, AppError> {
+        self.last_released_preview_seq
+            .lock()
+            .map_err(|_| AppError::internal("last released preview seq lock is poisoned"))
     }
 
     fn lock_embed_ops(&self) -> Result<MutexGuard<'_, ()>, AppError> {
@@ -255,6 +266,7 @@ impl AppService {
         storage::native_window_soft_delete_for_workspace(&tx, workspace_id, &now)?;
         storage::canvas_edge_soft_delete_for_workspace(&tx, workspace_id, &now)?;
         storage::canvas_node_soft_delete_for_workspace(&tx, workspace_id, &now)?;
+        storage::canvas_scene_soft_delete_for_workspace(&tx, workspace_id, &now)?;
         if storage::settings_get(&tx, ACTIVE_WORKSPACE_KEY)?.as_deref() == Some(workspace_id) {
             storage::settings_set(&tx, ACTIVE_WORKSPACE_KEY, None, None, &now)?;
         }
@@ -1079,6 +1091,7 @@ impl AppService {
                 original_style: session.original_style,
                 original_ex_style: session.original_ex_style,
                 original_parent: session.original_parent,
+                placement: session.placement,
             };
             let _ = crate::platform::windows::embed::restore_embedded_window(&info);
         }
@@ -1087,6 +1100,10 @@ impl AppService {
             let _ = session;
         }
 
+        {
+            let mut last_released = self.lock_last_released_preview_seq()?;
+            *last_released = (*last_released).max(preview_seq);
+        }
         Ok(Some(preview_seq))
     }
 
@@ -1113,10 +1130,13 @@ impl AppService {
             return Ok(false);
         };
         let guard = self.lock_embed()?;
-        let Some(session) = guard.as_ref() else {
-            return Ok(false);
-        };
-        Ok(session.workspace_app_id != workspace_app_id && incoming < session.preview_seq)
+        if let Some(session) = guard.as_ref() {
+            return Ok(
+                session.workspace_app_id != workspace_app_id && incoming < session.preview_seq,
+            );
+        }
+        drop(guard);
+        Ok(incoming <= *self.lock_last_released_preview_seq()?)
     }
 
     fn release_embedded_if_workspace(&self, workspace_id: &str) -> Result<(), AppError> {
@@ -1160,6 +1180,8 @@ impl AppService {
             original_style: 0,
             original_ex_style: 0,
             original_parent: 0,
+            #[cfg(windows)]
+            placement: crate::platform::windows::embed::SavedWindowPlacement::default(),
             preview_seq: 1,
         });
         Ok(())
@@ -1180,6 +1202,8 @@ impl AppService {
             original_style: 0,
             original_ex_style: 0,
             original_parent: 0,
+            #[cfg(windows)]
+            placement: crate::platform::windows::embed::SavedWindowPlacement::default(),
             preview_seq,
         });
         Ok(())
@@ -1191,6 +1215,15 @@ impl AppService {
             .ok()
             .and_then(|guard| guard.as_ref().map(|_| ()))
             .is_some()
+    }
+
+    #[doc(hidden)]
+    pub fn test_should_ignore_stale_embed(
+        &self,
+        workspace_app_id: &str,
+        preview_seq: Option<u64>,
+    ) -> Result<bool, AppError> {
+        self.should_ignore_stale_embed(workspace_app_id, preview_seq)
     }
 
     #[cfg(windows)]
@@ -1269,6 +1302,7 @@ impl AppService {
             original_style: restore.original_style,
             original_ex_style: restore.original_ex_style,
             original_parent: restore.original_parent,
+            placement: restore.placement,
             preview_seq,
         });
         Ok(())
@@ -1285,6 +1319,7 @@ impl AppService {
         workspace_id: &str,
         nodes: Vec<CanvasNodeInput>,
         edges: Vec<CanvasEdgeInput>,
+        scene: Option<CanvasScene>,
     ) -> Result<Canvas, AppError> {
         let mut conn = self.lock_db()?;
         let tx = conn.transaction()?;
@@ -1305,6 +1340,9 @@ impl AppService {
 
         storage::canvas_edge_soft_delete_missing(&tx, workspace_id, &keep_edges, &now)?;
         storage::canvas_node_soft_delete_missing(&tx, workspace_id, &keep_nodes, &now)?;
+        if let Some(scene) = scene {
+            storage::canvas_scene_upsert(&tx, workspace_id, &scene.normalize(), &now)?;
+        }
         tx.commit()?;
         load_canvas(&conn, workspace_id)
     }
@@ -1825,6 +1863,7 @@ fn load_canvas(conn: &Connection, workspace_id: &str) -> Result<Canvas, AppError
         workspace_id: workspace_id.to_string(),
         nodes: storage::canvas_node_list(conn, workspace_id)?,
         edges: storage::canvas_edge_list(conn, workspace_id)?,
+        scene: storage::canvas_scene_get(conn, workspace_id)?,
         updated_at: storage::canvas_latest_updated_at(conn, workspace_id)?,
     })
 }
