@@ -8,9 +8,9 @@
 use std::sync::mpsc::Sender;
 use std::thread::{self, JoinHandle};
 
-use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, WAIT_OBJECT_0, WPARAM};
+use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM};
 use windows::Win32::System::Threading::{
-    GetCurrentThreadId, OpenProcess, WaitForSingleObject, INFINITE, PROCESS_SYNCHRONIZE,
+    GetCurrentThreadId, OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
 };
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -130,8 +130,9 @@ unsafe extern "system" fn win_event_proc(
     }
 }
 
-/// Blocks until `pid` exits. Returns false when the wait cannot be registered.
-pub fn wait_for_process_exit(pid: u32) -> bool {
+/// Waits while the PID is still bound; cancellation also closes the native handle.
+/// Returns false when unbound or when the wait cannot be registered.
+pub fn wait_for_process_exit(pid: u32, is_tracked: impl Fn() -> bool) -> bool {
     if pid == 0 {
         return false;
     }
@@ -140,15 +141,32 @@ pub fn wait_for_process_exit(pid: u32) -> bool {
             Ok(handle) => handle,
             Err(_) => return false,
         };
-        let waited = WaitForSingleObject(handle, INFINITE);
+        let exited = loop {
+            if !is_tracked() {
+                break false;
+            }
+            let waited = WaitForSingleObject(handle, 250);
+            if waited == WAIT_OBJECT_0 {
+                break true;
+            }
+            if waited != WAIT_TIMEOUT {
+                break false;
+            }
+        };
         let _ = CloseHandle(handle);
-        waited == WAIT_OBJECT_0
+        exited
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn process_wait_cancels_for_a_running_unbound_process() {
+        // Current process remains alive; this can only finish via cancellation.
+        assert!(!wait_for_process_exit(std::process::id(), || false));
+    }
 
     #[test]
     fn watches_only_window_object_destroy() {

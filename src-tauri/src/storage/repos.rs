@@ -903,6 +903,32 @@ pub fn native_window_list_rows(
     collect_rows(rows)
 }
 
+/// Live rows only: polling must not allocate the application's entire window history.
+pub fn native_window_list_running_rows(
+    conn: &Connection,
+    workspace_app_id: &str,
+) -> Result<Vec<NativeWindowRow>, AppError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {NATIVE_WINDOW_ROW_COLUMNS}
+         FROM native_windows
+         WHERE workspace_app_id = ?1 AND deleted_at IS NULL AND status = 'running'"
+    ))?;
+    let rows = stmt.query_map([workspace_app_id], map_native_window_row)?;
+    collect_rows(rows)
+}
+
+pub fn native_window_running_ids_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> Result<Vec<String>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT external_window_id FROM native_windows
+         WHERE workspace_id = ?1 AND deleted_at IS NULL AND status = 'running'",
+    )?;
+    let rows = stmt.query_map([workspace_id], |row| row.get(0))?;
+    collect_rows(rows)
+}
+
 pub fn native_window_list_dto(
     conn: &Connection,
     workspace_app_id: &str,

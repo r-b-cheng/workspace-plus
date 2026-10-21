@@ -261,6 +261,7 @@ impl AppService {
         let tx = conn.transaction()?;
         require_workspace(&tx, workspace_id)?;
         let now = now_utc();
+        let bound_ids = storage::native_window_running_ids_for_workspace(&tx, workspace_id)?;
         storage::workspace_soft_delete(&tx, workspace_id, &now)?;
         storage::workspace_app_soft_delete_for_workspace(&tx, workspace_id, &now)?;
         storage::native_window_soft_delete_for_workspace(&tx, workspace_id, &now)?;
@@ -271,6 +272,9 @@ impl AppService {
             storage::settings_set(&tx, ACTIVE_WORKSPACE_KEY, None, None, &now)?;
         }
         tx.commit()?;
+        for id in bound_ids {
+            window_liveness::note_bound_closed(&id);
+        }
         Ok(DeleteWorkspaceResult {
             workspace_id: workspace_id.to_string(),
             deleted: true,
@@ -900,10 +904,14 @@ impl AppService {
             .filter(|item| item.deleted_at.is_none())
             .ok_or_else(|| AppError::not_found("workspace app not found"))?;
         let now = now_utc();
+        let bound_windows = storage::native_window_list_running_rows(&tx, &row.id)?;
         storage::workspace_app_soft_delete(&tx, &row.id, &now)?;
         storage::native_window_soft_delete_for_workspace_app(&tx, &row.id, &now)?;
         storage::settings_delete(&tx, &storage::workspace_app_embed_key(&row.id))?;
         tx.commit()?;
+        for window in bound_windows {
+            window_liveness::note_bound_closed(&window.external_window_id);
+        }
         Ok(RemoveWorkspaceAppResult {
             workspace_app_id: workspace_app_id.to_string(),
             removed: true,
@@ -1759,7 +1767,7 @@ fn sync_workspace_app_windows(
         )?;
     }
 
-    for row in storage::native_window_list_rows(conn, workspace_app_id)? {
+    for row in storage::native_window_list_running_rows(conn, workspace_app_id)? {
         if !seen.contains(&row.external_window_id) && row.status != "closed" {
             storage::native_window_mark_closed(conn, &row.id, now)?;
             window_liveness::note_bound_closed(&row.external_window_id);
