@@ -26,7 +26,7 @@ pub fn trim_path(path: &str) -> &str {
 }
 
 pub fn path_extension(path: &str) -> String {
-    Path::new(trim_path(path))
+    Path::new(path_basename(trim_path(path)))
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or("")
@@ -180,7 +180,7 @@ pub fn is_macos_bundle_executable(path: &str) -> bool {
 }
 
 pub fn display_name_from_path(path: &str) -> String {
-    Path::new(trim_path(path))
+    Path::new(path_basename(trim_path(path)))
         .file_stem()
         .and_then(|value| value.to_str())
         .unwrap_or(trim_path(path))
@@ -527,21 +527,26 @@ fn path_depth(path: &str) -> usize {
 }
 
 fn path_parent(path: &str) -> Option<String> {
-    Path::new(path)
-        .parent()
-        .map(|parent| normalize_windows_path(&parent.to_string_lossy()))
+    path.rfind(['\\', '/'])
+        .map(|index| normalize_windows_path(&path[..index]))
         .filter(|parent| !parent.is_empty())
 }
 
+// Window identities can contain either OS's paths, regardless of the host
+// running these rules. std::path only recognizes the host's separators.
+fn path_basename(path: &str) -> &str {
+    path.rsplit(['\\', '/']).next().unwrap_or(path)
+}
+
 fn path_file_name(path: &str) -> Option<String> {
-    Path::new(path)
+    Path::new(path_basename(path))
         .file_name()
         .and_then(|value| value.to_str())
         .map(|value| value.to_ascii_lowercase())
 }
 
 fn path_file_stem(path: &str) -> Option<String> {
-    Path::new(path)
+    Path::new(path_basename(path))
         .file_stem()
         .and_then(|value| value.to_str())
         .map(|value| value.to_ascii_lowercase())
@@ -596,6 +601,16 @@ where
 mod tests {
     use super::*;
     use crate::platform::PlatformErrorCode;
+
+    #[test]
+    fn path_metadata_uses_both_separators_without_losing_display_case() {
+        assert_eq!(display_name_from_path(r"C:\Tools\My App.exe"), "My App");
+        assert_eq!(display_name_from_path("/Applications/My App.app"), "My App");
+        assert_eq!(path_extension(r"C:\Folder.app\NoExtension"), "");
+        assert_eq!(path_extension(r"\Applications\Demo.app\Contents\MacOS\Demo"), "");
+        assert_eq!(path_parent("/Applications/Demo.app/Contents/MacOS/Demo"),
+            Some(r"\applications\demo.app\contents\macos".into()));
+    }
 
     fn scanned(name: &str, exe: &str, args: Option<&str>) -> ScannedApp {
         ScannedApp {

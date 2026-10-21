@@ -1062,10 +1062,20 @@ fn same_app_embed_updates_bounds_without_dropping_session() {
             None,
         )
         .unwrap();
-    assert!(result.embedded);
-    assert!(!result.fallback_focused);
-    assert!(result.reason.is_none());
-    assert!(env.service.test_has_embed_session());
+    #[cfg(windows)]
+    {
+        assert!(result.embedded);
+        assert!(!result.fallback_focused);
+        assert!(result.reason.is_none());
+        assert!(env.service.test_has_embed_session());
+    }
+    #[cfg(not(windows))]
+    {
+        assert!(!result.embedded);
+        assert!(result.fallback_focused);
+        assert!(result.reason.is_some());
+        assert!(!env.service.test_has_embed_session());
+    }
     let json = serde_json::to_string(&result).unwrap();
     assert!(!json.to_ascii_lowercase().contains("hwnd"));
 }
