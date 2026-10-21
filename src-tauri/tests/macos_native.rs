@@ -224,3 +224,18 @@ fn native_minimized_and_untitled_windows_stay_alive_until_closed() {
     assert_eq!(line.trim(), "done");
     assert!(!exists(), "a closed window must disappear even while its process lives");
 }
+
+/// Read-only regression for a running app whose kernel executable is a macOS
+/// code-signing clone. Supply the PID and installed executable explicitly.
+#[test]
+fn native_running_app_uses_installed_executable_path() {
+    if !native_enabled() { return; }
+    let Ok(pid) = std::env::var("MACOS_PATH_TEST_PID") else { return; };
+    let expected = std::env::var("MACOS_PATH_TEST_EXECUTABLE").expect("installed executable path");
+    let pid: u32 = pid.parse().unwrap();
+    let adapter = MacOsPlatformAdapter::new();
+    let windows = adapter.list_windows(&ListWindowsRequest::default()).unwrap();
+    let matched: Vec<_> = windows.iter().filter(|window| window.process_id == Some(pid)).collect();
+    assert!(!matched.is_empty(), "the selected application must have a window");
+    assert!(matched.iter().all(|window| window.process_path.as_deref() == Some(expected.as_str())));
+}

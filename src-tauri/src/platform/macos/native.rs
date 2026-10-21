@@ -198,10 +198,24 @@ pub fn is_process_trusted() -> bool {
 }
 
 pub fn process_path_for_pid(pid: u32) -> Option<String> {
+    let signed_pid = c_int::try_from(pid).ok().filter(|pid| *pid > 0)?;
+    // proc_pidpath may expose macOS's code-signing clone (.app.bundle) rather
+    // than the installed .app. AppKit supplies the stable application identity.
+    // Polling happens on background threads, so drain Cocoa temporaries here.
+    let app_path = objc2::rc::autoreleasepool(|_| {
+        let app = objc2_app_kit::NSRunningApplication::runningApplicationWithProcessIdentifier(signed_pid)?;
+        let url = app.executableURL()?;
+        let path = url.path()?.to_string();
+        (!path.is_empty()).then_some(path)
+    });
+    if app_path.is_some() {
+        return app_path;
+    }
+    // Plain processes and helper executables may have no NSRunningApplication.
     let mut buf = vec![0u8; PROC_PIDPATHINFO_MAXSIZE];
     let written = unsafe {
         proc_pidpath(
-            pid as c_int,
+            signed_pid,
             buf.as_mut_ptr() as *mut c_char,
             buf.len() as u32,
         )
