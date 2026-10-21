@@ -2021,3 +2021,39 @@ fn base64_png() -> String {
     // 1x1 transparent PNG
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2n2ZcAAAAASUVORK5CYII=".to_string()
 }
+
+#[test]
+fn canvas_asset_rejects_oversized_input_before_decoding_or_writing() {
+    let env = setup();
+    // Invalid base64 intentionally verifies that the size check precedes decode.
+    let encoded = "!".repeat(16 * 1024 * 1024 + 1);
+    let err = env.service.save_canvas_asset("huge.png", &encoded, Some("image/png"), None).unwrap_err();
+    assert_eq!(err.code, "Validation");
+    assert!(err.message.contains("12MB"));
+    assert_eq!(std::fs::read_dir(&env.service.paths().assets_dir).unwrap().count(), 0);
+}
+
+#[test]
+fn canvas_asset_read_checks_file_size_even_when_database_says_small() {
+    let env = setup();
+    let asset = env.service.save_canvas_asset("tiny.png", &base64_png(), Some("image/png"), None).unwrap();
+    let path = env.service.paths().assets_dir.join(&asset.storage_path);
+    // Sparse file: reproduce an unexpectedly large on-disk asset without
+    // allocating or writing its contents in this regression test.
+    std::fs::OpenOptions::new().write(true).open(path).unwrap()
+        .set_len(1024 * 1024 * 1024).unwrap();
+    let err = env.service.read_canvas_asset(&asset.id).unwrap_err();
+    assert_eq!(err.code, "Validation");
+    assert!(err.message.contains("12MB"));
+}
+
+#[test]
+fn canvas_asset_accepts_exactly_twelve_mib() {
+    use base64::Engine;
+    let env = setup();
+    let bytes = vec![42; 12 * 1024 * 1024];
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let asset = env.service.save_canvas_asset("boundary.png", &encoded, Some("image/png"), None).unwrap();
+    assert_eq!(asset.byte_size, Some(bytes.len() as i64));
+    assert_eq!(env.service.read_canvas_asset(&asset.id).unwrap().content_base64, encoded);
+}
