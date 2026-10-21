@@ -1058,6 +1058,24 @@ fn map_canvas_node(row: &Row<'_>) -> rusqlite::Result<CanvasNode> {
     })
 }
 
+#[derive(Clone, Debug)]
+pub struct CanvasRecordIdentity {
+    pub workspace_id: String,
+    pub created_at: String,
+}
+
+pub fn canvas_node_identity(conn: &Connection, id: &str) -> Result<Option<CanvasRecordIdentity>, AppError> {
+    conn.query_row("SELECT workspace_id, created_at FROM canvas_nodes WHERE id = ?1", [id], |row| {
+        Ok(CanvasRecordIdentity { workspace_id: row.get(0)?, created_at: row.get(1)? })
+    }).optional().map_err(AppError::from)
+}
+
+pub fn canvas_edge_identity(conn: &Connection, id: &str) -> Result<Option<CanvasRecordIdentity>, AppError> {
+    conn.query_row("SELECT workspace_id, created_at FROM canvas_edges WHERE id = ?1", [id], |row| {
+        Ok(CanvasRecordIdentity { workspace_id: row.get(0)?, created_at: row.get(1)? })
+    }).optional().map_err(AppError::from)
+}
+
 pub fn canvas_node_exists(conn: &Connection, id: &str) -> Result<bool, AppError> {
     let found: bool = conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM canvas_nodes WHERE id = ?1)",
@@ -1105,7 +1123,7 @@ pub fn canvas_node_update(conn: &Connection, node: &CanvasNode) -> Result<(), Ap
              content_text = ?5, asset_id = ?6, x = ?7, y = ?8, width = ?9, height = ?10,
              color = ?11, metadata_json = ?12, z_index = ?13, updated_at = ?14,
              deleted_at = NULL
-         WHERE id = ?15",
+         WHERE id = ?15 AND workspace_id = ?1",
         params![
             node.workspace_id,
             node.node_type,
@@ -1127,11 +1145,11 @@ pub fn canvas_node_update(conn: &Connection, node: &CanvasNode) -> Result<(), Ap
     Ok(())
 }
 
-pub fn canvas_node_soft_delete(conn: &Connection, id: &str, now: &str) -> Result<usize, AppError> {
+pub fn canvas_node_soft_delete(conn: &Connection, workspace_id: &str, id: &str, now: &str) -> Result<usize, AppError> {
     let changed = conn.execute(
         "UPDATE canvas_nodes SET deleted_at = ?1, updated_at = ?1
-         WHERE id = ?2 AND deleted_at IS NULL",
-        params![now, id],
+         WHERE id = ?2 AND workspace_id = ?3 AND deleted_at IS NULL",
+        params![now, id, workspace_id],
     )?;
     Ok(changed)
 }
@@ -1242,7 +1260,7 @@ pub fn canvas_edge_update(conn: &Connection, edge: &CanvasEdge) -> Result<(), Ap
         "UPDATE canvas_edges
          SET workspace_id = ?1, source_node_id = ?2, target_node_id = ?3, label = ?4,
              edge_type = ?5, metadata_json = ?6, updated_at = ?7, deleted_at = NULL
-         WHERE id = ?8",
+         WHERE id = ?8 AND workspace_id = ?1",
         params![
             edge.workspace_id,
             edge.source_node_id,
