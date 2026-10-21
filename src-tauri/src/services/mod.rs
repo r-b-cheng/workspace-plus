@@ -1332,8 +1332,14 @@ impl AppService {
             keep_nodes.push(node.id);
         }
 
+        let keep_node_ids: HashSet<&str> = keep_nodes.iter().map(String::as_str).collect();
         let mut keep_edges = Vec::new();
         for input in edges {
+            if !keep_node_ids.contains(input.source_node_id.as_str())
+                || !keep_node_ids.contains(input.target_node_id.as_str())
+            {
+                return Err(AppError::validation("canvas edge endpoints must belong to this canvas"));
+            }
             let edge = upsert_edge_on_conn(&tx, workspace_id, input, &now)?;
             keep_edges.push(edge.id);
         }
@@ -1365,7 +1371,7 @@ impl AppService {
         let tx = conn.transaction()?;
         require_workspace(&tx, workspace_id)?;
         let now = now_utc();
-        let changed = storage::canvas_node_soft_delete(&tx, node_id, &now)?;
+        let changed = storage::canvas_node_soft_delete(&tx, workspace_id, node_id, &now)?;
         if changed == 0 {
             return Err(AppError::not_found("canvas node not found"));
         }
@@ -1890,16 +1896,13 @@ fn upsert_node_on_conn(
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_else(new_id);
-    let exists = storage::canvas_node_exists(conn, &id)?;
-    let created_at = if exists {
-        storage::canvas_node_list(conn, workspace_id)?
-            .into_iter()
-            .find(|node| node.id == id)
-            .map(|node| node.created_at)
-            .unwrap_or_else(|| now.to_string())
-    } else {
-        now.to_string()
-    };
+    // A primary-key lookup also avoids loading every node for each upsert.
+    let existing = storage::canvas_node_identity(conn, &id)?;
+    if existing.as_ref().is_some_and(|row| row.workspace_id != workspace_id) {
+        return Err(AppError::validation("canvas node belongs to another workspace"));
+    }
+    let exists = existing.is_some();
+    let created_at = existing.map(|row| row.created_at).unwrap_or_else(|| now.to_string());
     let node = CanvasNode {
         id,
         workspace_id: workspace_id.to_string(),
@@ -1942,8 +1945,12 @@ fn upsert_edge_on_conn(
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_else(new_id);
-    let exists = storage::canvas_edge_exists(conn, &id)?;
-    let created_at = if exists { now.to_string() } else { now.to_string() };
+    let existing = storage::canvas_edge_identity(conn, &id)?;
+    if existing.as_ref().is_some_and(|row| row.workspace_id != workspace_id) {
+        return Err(AppError::validation("canvas edge belongs to another workspace"));
+    }
+    let exists = existing.is_some();
+    let created_at = existing.map(|row| row.created_at).unwrap_or_else(|| now.to_string());
     let edge = CanvasEdge {
         id,
         workspace_id: workspace_id.to_string(),
