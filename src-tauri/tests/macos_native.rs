@@ -175,3 +175,18 @@ fn native_focus_without_permission_is_denied() {
         }
     }
 }
+
+/// Read-only regression for a running app whose kernel executable is a macOS
+/// code-signing clone. Supply the PID and installed executable explicitly.
+#[test]
+fn native_running_app_uses_installed_executable_path() {
+    if !native_enabled() { return; }
+    let Ok(pid) = std::env::var("MACOS_PATH_TEST_PID") else { return; };
+    let expected = std::env::var("MACOS_PATH_TEST_EXECUTABLE").expect("installed executable path");
+    let pid: u32 = pid.parse().unwrap();
+    let adapter = MacOsPlatformAdapter::new();
+    let windows = adapter.list_windows(&ListWindowsRequest::default()).unwrap();
+    let matched: Vec<_> = windows.iter().filter(|window| window.process_id == Some(pid)).collect();
+    assert!(!matched.is_empty(), "the selected application must have a window");
+    assert!(matched.iter().all(|window| window.process_path.as_deref() == Some(expected.as_str())));
+}
