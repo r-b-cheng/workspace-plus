@@ -323,9 +323,54 @@ pub fn window_belongs_to_app(
     process == bundle || process.starts_with(&format!("{bundle}/"))
 }
 
+/// A title match must identify one window. If Quartz withheld a title, a
+/// single AX window is still unambiguous; multiple candidates must fail closed.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn choose_ax_window(titles: &[Option<String>], title: &str) -> Option<usize> {
+    let matches: Vec<_> = titles.iter().enumerate()
+        .filter(|(_, candidate)| !title.trim().is_empty() && candidate.as_deref() == Some(title))
+        .map(|(index, _)| index).collect();
+    match matches.as_slice() {
+        [index] => Some(*index),
+        [] if titles.len() == 1 => Some(0),
+        _ => None,
+    }
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn require_ax_success(code: i32) -> Result<(), PlatformError> {
+    match code {
+        0 => Ok(()),
+        -25211 => Err(focus_denied_without_permission()),
+        _ => Err(PlatformError::focus_denied("系统未能切换目标窗口，请稍后重试。")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn focus_does_not_select_an_unrelated_or_ambiguous_window() {
+        let titles = vec![Some("first".into()), Some("target".into())];
+        assert_eq!(choose_ax_window(&titles, "target"), Some(1));
+        assert_eq!(choose_ax_window(&titles, "missing"), None);
+        assert_eq!(choose_ax_window(&[Some("same".into()), Some("same".into())], "same"), None);
+        assert_eq!(choose_ax_window(&[None, None], "fallback"), None);
+        assert_eq!(choose_ax_window(&[None], "fallback"), Some(0));
+        assert_eq!(choose_ax_window(&[], "target"), None);
+    }
+
+    #[test]
+    fn failed_accessibility_operations_are_never_reported_as_success() {
+        assert!(require_ax_success(0).is_ok());
+        for code in [-25200, -25202, -25204, -25205, -25211, 123] {
+            let err = require_ax_success(code).unwrap_err();
+            assert_eq!(err.code.as_str(), "FocusDenied");
+        }
+        assert!(require_ax_success(-25211).unwrap_err().message.contains("辅助功能"));
+    }
+
     use crate::platform::PlatformErrorCode;
     use std::io::Write;
 

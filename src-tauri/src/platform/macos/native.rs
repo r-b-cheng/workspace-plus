@@ -8,7 +8,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::platform::macos::logic::{
-    closed_window_error, decode_macos_window_id, encode_macos_window_id,
+    choose_ax_window, closed_window_error, decode_macos_window_id, encode_macos_window_id,
+    require_ax_success,
     focus_denied_without_permission, window_belongs_to_app, MacosWindowKey, ResolvedMacosTarget,
 };
 use crate::platform::rules::{launch_result_from_parts, split_launch_args};
@@ -400,104 +401,83 @@ pub fn focus_window(native_window_id: &str) -> Result<FocusWindowResult, Platfor
 fn raise_window(key: &MacosWindowKey, title: &str) -> Result<FocusWindowResult, PlatformError> {
     let app = OwnedCf::from_create(unsafe { AXUIElementCreateApplication(key.process_id as i32) })
         .ok_or_else(closed_window_error)?;
-
     let frontmost = cf_string("AXFrontmost").ok_or_else(|| {
         PlatformError::internal("failed to allocate accessibility attribute")
     })?;
-    let front_err = unsafe {
+    require_ax_success(unsafe {
         AXUIElementSetAttributeValue(app.as_ptr(), frontmost.as_ptr(), kCFBooleanTrue)
-    };
-    if front_err == K_AX_ERROR_API_DISABLED {
-        return Err(focus_denied_without_permission());
-    }
-    if front_err != K_AX_ERROR_SUCCESS {
-        return Err(focus_denied_without_permission());
-    }
-
-    let restored = raise_named_ax_window(app.as_ptr(), title);
-    if matches!(restored, Err(code) if code == K_AX_ERROR_API_DISABLED) {
-        return Err(focus_denied_without_permission());
-    }
-    Ok(FocusWindowResult {
-        focused: true,
-        restored: restored.unwrap_or(false),
-    })
+    })?;
+    // Propagate every restore/raise failure; activating an app alone does not
+    // prove that the requested window was restored or raised.
+    let restored = raise_named_ax_window(app.as_ptr(), title)?;
+    Ok(FocusWindowResult { focused: true, restored })
 }
 
-fn raise_named_ax_window(app: CfTypeRef, title: &str) -> Result<bool, i32> {
-    let windows_attr = cf_string("AXWindows").ok_or(K_AX_ERROR_API_DISABLED)?;
+fn raise_named_ax_window(app: CfTypeRef, title: &str) -> Result<bool, PlatformError> {
+    let attribute = |name| cf_string(name).ok_or_else(|| {
+        PlatformError::internal("failed to allocate accessibility attribute")
+    });
+    let windows_attr = attribute("AXWindows")?;
     let mut value: CfTypeRef = ptr::null();
     let err = unsafe { AXUIElementCopyAttributeValue(app, windows_attr.as_ptr(), &mut value) };
-    if err != K_AX_ERROR_SUCCESS {
-        return Err(err);
-    }
-    let Some(windows) = OwnedCf::from_create(value) else {
-        return Ok(false);
-    };
+    let windows = OwnedCf::from_create(value);
+    require_ax_success(err)?;
+    let windows = windows.ok_or_else(|| PlatformError::focus_denied("未找到可切换的目标窗口。"))?;
 
-    let title_attr = cf_string("AXTitle").ok_or(K_AX_ERROR_API_DISABLED)?;
-    let minimized_attr = cf_string("AXMinimized").ok_or(K_AX_ERROR_API_DISABLED)?;
-    let raise_action = cf_string("AXRaise").ok_or(K_AX_ERROR_API_DISABLED)?;
+    let title_attr = attribute("AXTitle")?;
+    let minimized_attr = attribute("AXMinimized")?;
+    let raise_action = attribute("AXRaise")?;
     let count = unsafe { CFArrayGetCount(windows.as_ptr()) };
-
-    let mut chosen: Option<CfTypeRef> = None;
+    let mut candidates = Vec::new();
+    let mut titles = Vec::new();
     for index in 0..count {
         let element = unsafe { CFArrayGetValueAtIndex(windows.as_ptr(), index) };
         if element.is_null() {
             continue;
         }
         let mut title_value: CfTypeRef = ptr::null();
-        let title_err =
-            unsafe { AXUIElementCopyAttributeValue(element, title_attr.as_ptr(), &mut title_value) };
+        let title_err = unsafe {
+            AXUIElementCopyAttributeValue(element, title_attr.as_ptr(), &mut title_value)
+        };
+        let owned = OwnedCf::from_create(title_value);
         if title_err == K_AX_ERROR_API_DISABLED {
-            return Err(K_AX_ERROR_API_DISABLED);
+            return Err(focus_denied_without_permission());
         }
-        let ax_title = if title_err == K_AX_ERROR_SUCCESS {
-            let owned = OwnedCf::from_create(title_value);
-            owned.and_then(|item| cf_string_to_rust(item.as_ptr()))
+        titles.push(if title_err == K_AX_ERROR_SUCCESS {
+            owned.as_ref().and_then(|item| cf_string_to_rust(item.as_ptr()))
         } else {
             None
-        };
-        if ax_title.as_deref() == Some(title) {
-            chosen = Some(element);
-            break;
-        }
-        if chosen.is_none() {
-            chosen = Some(element);
-        }
+        });
+        candidates.push(element);
     }
+    let chosen = choose_ax_window(&titles, title).ok_or_else(|| {
+        PlatformError::focus_denied("无法唯一确定目标窗口，请从目标应用中选择窗口。")
+    })?;
+    let element = candidates[chosen];
 
-    let Some(element) = chosen else {
-        return Ok(false);
-    };
-
-    let mut restored = false;
     let mut minimized_value: CfTypeRef = ptr::null();
-    let min_err =
-        unsafe { AXUIElementCopyAttributeValue(element, minimized_attr.as_ptr(), &mut minimized_value) };
-    if min_err == K_AX_ERROR_API_DISABLED {
-        return Err(K_AX_ERROR_API_DISABLED);
-    }
-    if min_err == K_AX_ERROR_SUCCESS && !minimized_value.is_null() {
-        if minimized_value == unsafe { kCFBooleanTrue } {
-            let set_err = unsafe {
-                AXUIElementSetAttributeValue(element, minimized_attr.as_ptr(), kCFBooleanFalse)
-            };
-            if set_err == K_AX_ERROR_API_DISABLED {
-                return Err(K_AX_ERROR_API_DISABLED);
+    let min_err = unsafe {
+        AXUIElementCopyAttributeValue(element, minimized_attr.as_ptr(), &mut minimized_value)
+    };
+    // Own copied values before any early return, including restore failures.
+    let minimized = OwnedCf::from_create(minimized_value);
+    let mut restored = false;
+    match min_err {
+        K_AX_ERROR_SUCCESS => {
+            if minimized.as_ref().is_some_and(|value| value.as_ptr() == unsafe { kCFBooleanTrue }) {
+                require_ax_success(unsafe {
+                    AXUIElementSetAttributeValue(element, minimized_attr.as_ptr(), kCFBooleanFalse)
+                })?;
+                restored = true;
             }
-            restored = set_err == K_AX_ERROR_SUCCESS;
         }
-        unsafe { CFRelease(minimized_value) };
+        // Some windows do not support minimization, but still support raising.
+        -25205 | -25212 => {}, // attribute unsupported / no value
+        error => require_ax_success(error)?,
     }
-
-    let raise_err = unsafe { AXUIElementPerformAction(element, raise_action.as_ptr()) };
-    if raise_err == K_AX_ERROR_API_DISABLED {
-        return Err(K_AX_ERROR_API_DISABLED);
-    }
+    require_ax_success(unsafe { AXUIElementPerformAction(element, raise_action.as_ptr()) })?;
     Ok(restored)
 }
-
 
 #[cfg(test)]
 mod tests {
