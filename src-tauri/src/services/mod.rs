@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -43,6 +44,14 @@ const ALLOWED_NODE_TYPES: &[&str] = &[
     "screenshot",
     "app_note",
 ];
+
+// Match the frontend's 12 MiB image limit at the backend boundary as well.
+const MAX_CANVAS_ASSET_BYTES: usize = 12 * 1024 * 1024;
+const MAX_CANVAS_ASSET_BASE64_BYTES: usize = MAX_CANVAS_ASSET_BYTES.div_ceil(3) * 4;
+
+fn oversized_asset_error() -> AppError {
+    AppError::validation("图片过大，请选择 12MB 以内的文件。")
+}
 
 #[derive(Clone, Debug)]
 struct ShortcutRegistrationState {
@@ -1384,9 +1393,17 @@ impl AppService {
         if file_name.trim().is_empty() {
             return Err(AppError::validation("fileName is required"));
         }
+        // Reject before allocating the decoded buffer, even for malformed data.
+        let content_base64 = content_base64.trim();
+        if content_base64.len() > MAX_CANVAS_ASSET_BASE64_BYTES {
+            return Err(oversized_asset_error());
+        }
         let bytes = base64::engine::general_purpose::STANDARD
-            .decode(content_base64.trim())
+            .decode(content_base64)
             .map_err(|_| AppError::validation("contentBase64 is not valid base64"))?;
+        if bytes.len() > MAX_CANVAS_ASSET_BYTES {
+            return Err(oversized_asset_error());
+        }
         if bytes.is_empty() {
             return Err(AppError::validation("asset content is empty"));
         }
@@ -1436,8 +1453,26 @@ impl AppService {
         drop(conn);
 
         let absolute = resolve_asset_file(&self.paths.assets_dir, &asset.storage_path)?;
-        let bytes = fs::read(&absolute).map_err(|_| AppError::not_found("asset file missing"))?;
-        let content_base64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let file = fs::File::open(&absolute)
+            .map_err(|_| AppError::not_found("asset file missing"))?;
+        let metadata = file.metadata().map_err(|_| AppError::not_found("asset file missing"))?;
+        if !metadata.is_file() {
+            return Err(AppError::not_found("asset file missing"));
+        }
+        if metadata.len() > MAX_CANVAS_ASSET_BYTES as u64 {
+            return Err(oversized_asset_error());
+        }
+        // A file can grow after metadata() or have stale DB metadata. Cap the
+        // actual read too, then reject the extra byte before base64 allocation.
+        let mut bytes = Vec::new();
+        file.take(MAX_CANVAS_ASSET_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| AppError::not_found("asset file missing"))?;
+        if bytes.len() > MAX_CANVAS_ASSET_BYTES {
+            return Err(oversized_asset_error());
+        }
+        let content_base64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        drop(bytes);
         let mime = mime_from_asset(&asset);
         Ok(CanvasAssetContent {
             asset_id: asset.id,
