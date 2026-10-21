@@ -228,7 +228,9 @@ pub fn list_top_level_windows() -> Result<Vec<PlatformWindow>, PlatformError> {
         )
     };
     let Some(info) = OwnedCf::from_create(info) else {
-        return Ok(Vec::new());
+        // A failed query is not an empty desktop. The watchdog preserves the
+        // previous bindings when enumeration fails.
+        return Err(PlatformError::internal("无法读取窗口列表，请稍后重试。"));
     };
 
     let count = unsafe { CFArrayGetCount(info.as_ptr()) };
@@ -258,15 +260,20 @@ fn describe_window(
     if layer != 0 {
         return None;
     }
-    let pid = dict_i64(dict, "kCGWindowOwnerPID")? as u32;
+    let pid = u32::try_from(dict_i64(dict, "kCGWindowOwnerPID")?).ok()?;
     if pid == 0 || pid == self_pid {
         return None;
     }
-    let window_number = dict_i64(dict, "kCGWindowNumber")? as u32;
-    let title = dict_string(dict, "kCGWindowName").unwrap_or_default();
-    if title.trim().is_empty() {
+    let window_number = u32::try_from(dict_i64(dict, "kCGWindowNumber")?).ok()?;
+    if window_number == 0 {
         return None;
     }
+    // kCGWindowName is optional (including for offscreen/minimized windows
+    // and when macOS withholds titles). Identity comes from PID + window ID.
+    let title = dict_string(dict, "kCGWindowName")
+        .filter(|title| !title.trim().is_empty())
+        .or_else(|| dict_string(dict, "kCGWindowOwnerName").filter(|name| !name.trim().is_empty()))
+        .unwrap_or_else(|| "未命名窗口".into());
     let process_path = path_cache
         .entry(pid)
         .or_insert_with(|| process_path_for_pid(pid))
@@ -470,4 +477,57 @@ fn raise_named_ax_window(app: CfTypeRef, title: &str) -> Result<bool, PlatformEr
     }
     require_ax_success(unsafe { AXUIElementPerformAction(element, raise_action.as_ptr()) })?;
     Ok(restored)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFDataCreate(allocator: CfTypeRef, bytes: *const u8, length: CfIndex) -> CfTypeRef;
+        fn CFPropertyListCreateWithData(
+            allocator: CfTypeRef, data: CfTypeRef, options: usize,
+            format: *mut isize, error: *mut CfTypeRef,
+        ) -> CfTypeRef;
+    }
+
+    fn describe_fixture(extra: &str, layer: i32, pid: u32) -> Option<PlatformWindow> {
+        let xml = format!(r#"<?xml version="1.0"?><plist version="1.0"><dict>
+            <key>kCGWindowLayer</key><integer>{layer}</integer>
+            <key>kCGWindowOwnerPID</key><integer>{pid}</integer>
+            <key>kCGWindowNumber</key><integer>42</integer>
+            {extra}</dict></plist>"#);
+        let data = OwnedCf::from_create(unsafe {
+            CFDataCreate(ptr::null(), xml.as_ptr(), xml.len() as CfIndex)
+        }).unwrap();
+        let dict = OwnedCf::from_create(unsafe {
+            CFPropertyListCreateWithData(ptr::null(), data.as_ptr(), 0, ptr::null_mut(), ptr::null_mut())
+        }).unwrap();
+        // Preseed a process path so the test performs no native process lookup.
+        let mut paths = std::collections::HashMap::from([
+            (pid, Some("/Applications/Demo.app/Contents/MacOS/Demo".into()))
+        ]);
+        describe_window(dict.as_ptr(), 999, &mut paths)
+    }
+
+    #[test]
+    fn missing_title_and_onscreen_metadata_do_not_mean_closed() {
+        let hidden = describe_fixture("", 0, 123).unwrap();
+        assert_eq!(hidden.native_window_id, encode_macos_window_id(123, 42));
+        assert!(!hidden.title.is_empty());
+        let blank = describe_fixture(
+            "<key>kCGWindowName</key><string> </string><key>kCGWindowOwnerName</key><string>Demo</string>",
+            0, 123,
+        ).unwrap();
+        assert_eq!(blank.native_window_id, hidden.native_window_id);
+        assert_eq!(blank.title, "Demo");
+    }
+
+    #[test]
+    fn title_fallback_does_not_admit_other_layers_or_own_windows() {
+        assert!(describe_fixture("", 3, 123).is_none());
+        assert!(describe_fixture("", 0, 999).is_none());
+        assert!(describe_fixture("", 0, 0).is_none());
+    }
 }
