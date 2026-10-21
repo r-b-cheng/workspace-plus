@@ -175,3 +175,52 @@ fn native_focus_without_permission_is_denied() {
         }
     }
 }
+
+// Runs only when explicitly requested. The helper owns its window, so this
+// exercises minimize/restore/close without manipulating any user application.
+#[test]
+fn native_minimized_and_untitled_windows_stay_alive_until_closed() {
+    if !native_enabled() {
+        return;
+    }
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Child, Command, Stdio};
+    struct Fixture(Child);
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let binary = temp.path().join("window-fixture");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/macos_window.m");
+    let compiled = Command::new("clang")
+        .args(["-fobjc-arc", "-framework", "Cocoa"])
+        .arg(source).arg("-o").arg(&binary).status().unwrap();
+    assert!(compiled.success());
+    let mut fixture = Fixture(Command::new(binary)
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap());
+    let mut output = BufReader::new(fixture.0.stdout.take().unwrap());
+    let mut line = String::new();
+    output.read_line(&mut line).unwrap();
+    let ids: Vec<u32> = line.split_whitespace().map(|part| part.parse().unwrap()).collect();
+    assert_eq!(ids.len(), 2);
+    let id = workspace_hub_lib::platform::macos::encode_macos_window_id(ids[0], ids[1]);
+    let adapter = MacOsPlatformAdapter::new();
+    let exists = || adapter.list_windows(&ListWindowsRequest::default()).unwrap()
+        .iter().any(|window| window.native_window_id == id);
+    assert!(exists(), "the visible fixture must be discovered");
+    for action in ["minimize", "untitle", "restore"] {
+        writeln!(fixture.0.stdin.as_mut().unwrap(), "{action}").unwrap();
+        line.clear();
+        output.read_line(&mut line).unwrap();
+        assert_eq!(line.trim(), "done");
+        assert!(exists(), "window identity disappeared after {action}");
+    }
+    writeln!(fixture.0.stdin.as_mut().unwrap(), "close").unwrap();
+    line.clear();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line.trim(), "done");
+    assert!(!exists(), "a closed window must disappear even while its process lives");
+}
