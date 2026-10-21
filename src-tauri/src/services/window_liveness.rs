@@ -100,14 +100,22 @@ impl WindowChangeSink for TauriWindowChangeSink {
     }
 }
 
+#[cfg(windows)]
 struct ProcessWaitHub {
     waiting: Arc<Mutex<HashSet<u32>>>,
+    wanted: Arc<Mutex<HashSet<u32>>>,
     on_exit: Arc<dyn Fn(u32) + Send + Sync>,
 }
 
+#[cfg(windows)]
 impl ProcessWaitHub {
     fn ensure(&self, pid: u32) {
         if pid == 0 {
+            return;
+        }
+        if let Ok(mut wanted) = self.wanted.lock() {
+            wanted.insert(pid);
+        } else {
             return;
         }
         {
@@ -121,10 +129,13 @@ impl ProcessWaitHub {
 
         let waiting = Arc::clone(&self.waiting);
         let on_exit = self.on_exit.clone();
+        let wanted = Arc::clone(&self.wanted);
         let spawned = thread::Builder::new()
             .name(format!("wh-proc-wait-{pid}"))
             .spawn(move || {
-                let exited = wait_for_pid(pid);
+                let exited = crate::platform::windows::win_events::wait_for_process_exit(pid, || {
+                    wanted.lock().map(|pids| pids.contains(&pid)).unwrap_or(false)
+                });
                 if exited {
                     on_exit(pid);
                 }
@@ -140,9 +151,12 @@ impl ProcessWaitHub {
     }
 }
 
+#[cfg(windows)]
 static PROCESS_WAITS: Mutex<Option<Arc<ProcessWaitHub>>> = Mutex::new(None);
+#[cfg(any(windows, test))]
 static RUNNING_BOUND_IDS: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
+#[cfg(any(windows, test))]
 fn lock_running_bound_ids() -> Option<std::sync::MutexGuard<'static, Option<HashSet<String>>>> {
     RUNNING_BOUND_IDS.lock().ok()
 }
@@ -151,12 +165,15 @@ pub fn note_bound_running(opaque_id: &str) {
     if opaque_id.is_empty() {
         return;
     }
+    #[cfg(any(windows, test))]
     if let Some(mut guard) = lock_running_bound_ids() {
         guard.get_or_insert_with(HashSet::new).insert(opaque_id.to_string());
     }
 }
 
 pub fn note_bound_closed(opaque_id: &str) {
+    let _ = opaque_id;
+    #[cfg(any(windows, test))]
     if let Some(mut guard) = lock_running_bound_ids() {
         if let Some(ids) = guard.as_mut() {
             ids.remove(opaque_id);
@@ -164,6 +181,7 @@ pub fn note_bound_closed(opaque_id: &str) {
     }
 }
 
+#[cfg(any(windows, test))]
 pub fn is_running_bound_opaque(opaque_id: &str) -> bool {
     lock_running_bound_ids()
         .and_then(|guard| guard.as_ref().map(|ids| ids.contains(opaque_id)))
@@ -178,22 +196,11 @@ pub fn note_bound_process(pid: u32) {
     if pid == 0 {
         return;
     }
+    #[cfg(windows)]
     if let Ok(guard) = PROCESS_WAITS.lock() {
         if let Some(hub) = guard.as_ref() {
             hub.ensure(pid);
         }
-    }
-}
-
-fn wait_for_pid(pid: u32) -> bool {
-    #[cfg(windows)]
-    {
-        crate::platform::windows::win_events::wait_for_process_exit(pid)
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = pid;
-        false
     }
 }
 
@@ -206,9 +213,12 @@ pub fn start_window_liveness(app: &AppHandle) {
         .state::<AppService>()
         .set_window_change_sink(Arc::new(TauriWindowChangeSink(handle.clone())));
 
-    install_process_wait_hub(handle.clone());
-    seed_running_bound_ids(&handle);
-    register_existing_bound_pids(&handle);
+    #[cfg(windows)]
+    {
+        install_process_wait_hub(handle.clone());
+        seed_running_bound_ids(&handle);
+        register_existing_bound_pids(&handle);
+    }
     spawn_watchdog(handle.clone());
 
     #[cfg(windows)]
@@ -219,9 +229,11 @@ pub fn start_window_liveness(app: &AppHandle) {
     }
 }
 
+#[cfg(windows)]
 fn install_process_wait_hub(handle: AppHandle) {
     let hub = Arc::new(ProcessWaitHub {
         waiting: Arc::new(Mutex::new(HashSet::new())),
+        wanted: Arc::new(Mutex::new(HashSet::new())),
         on_exit: Arc::new(move |pid| {
             let service = handle.state::<AppService>();
             if let Err(err) = service.handle_process_exited(pid) {
@@ -234,6 +246,7 @@ fn install_process_wait_hub(handle: AppHandle) {
     }
 }
 
+#[cfg(windows)]
 fn seed_running_bound_ids(handle: &AppHandle) {
     let service = handle.state::<AppService>();
     match service.running_bound_opaque_ids() {
@@ -246,6 +259,7 @@ fn seed_running_bound_ids(handle: &AppHandle) {
     }
 }
 
+#[cfg(windows)]
 fn register_existing_bound_pids(handle: &AppHandle) {
     let service = handle.state::<AppService>();
     match service.running_bound_process_ids() {
@@ -275,10 +289,18 @@ fn run_watchdog_tick(handle: &AppHandle) {
     if let Err(err) = service.watchdog_reconcile_active_workspace() {
         tracing::warn!(error = %err, "window liveness watchdog failed");
     }
+    #[cfg(windows)]
     match service.running_bound_process_ids() {
         Ok(pids) => {
-            for pid in pids {
-                note_bound_process(pid);
+            if let Ok(hub) = PROCESS_WAITS.lock() {
+                if let Some(hub) = hub.as_ref() {
+                    if let Ok(mut wanted) = hub.wanted.lock() {
+                        *wanted = pids.iter().copied().collect();
+                    }
+                    for pid in pids {
+                        hub.ensure(pid);
+                    }
+                }
             }
         }
         Err(err) => tracing::warn!(error = %err, "failed to refresh process waits"),
@@ -513,7 +535,7 @@ impl AppService {
         let conn = self.lock_db()?;
         let app = storage::workspace_app_get(&conn, workspace_app_id)?
             .ok_or_else(|| AppError::not_found("workspace app not found"))?;
-        let mut windows = storage::native_window_list_rows(&conn, workspace_app_id)?
+        let mut windows = storage::native_window_list_running_rows(&conn, workspace_app_id)?
             .into_iter()
             .map(|row| (row.id, row.status))
             .collect::<Vec<_>>();
@@ -598,6 +620,59 @@ impl AppService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removing_apps_or_workspaces_releases_tracked_window_ids() {
+        for delete_workspace in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let adapter = Arc::new(crate::platform::MockPlatformAdapter::new());
+            let service = AppService::open(temp.path(), adapter).unwrap();
+            let ws = service.create_workspace("cleanup", None, None, None).unwrap();
+            service.refresh_installed_apps().unwrap();
+            let app = service.search_installed_apps("notepad", None).unwrap().remove(0);
+            let bound = service.launch_workspace_app(&ws.id, &app.id).unwrap();
+            let opaque = format!("cleanup-{}", ws.id);
+            {
+                let conn = service.lock_db().unwrap();
+                storage::native_window_insert(&conn, &storage::new_id(), &ws.id, &bound.id,
+                    "mock", &opaque, None, None, Some("cleanup"), &now_utc()).unwrap();
+            }
+            note_bound_running(&opaque);
+            assert!(is_running_bound_opaque(&opaque));
+            if delete_workspace {
+                service.delete_workspace(&ws.id).unwrap();
+            } else {
+                service.remove_workspace_app(&bound.id).unwrap();
+            }
+            assert!(!is_running_bound_opaque(&opaque));
+        }
+    }
+
+    #[test]
+    fn watchdog_snapshot_excludes_closed_history() {
+        let temp = tempfile::tempdir().unwrap();
+        let adapter = Arc::new(crate::platform::MockPlatformAdapter::new());
+        let service = AppService::open(temp.path(), adapter).unwrap();
+        let ws = service.create_workspace("history", None, None, None).unwrap();
+        service.refresh_installed_apps().unwrap();
+        let app = service.search_installed_apps("notepad", None).unwrap().remove(0);
+        let bound = service.launch_workspace_app(&ws.id, &app.id).unwrap();
+        {
+            let mut conn = service.lock_db().unwrap();
+            let tx = conn.transaction().unwrap();
+            for index in 0..2000 {
+                let id = format!("history-{index}");
+                storage::native_window_insert(&tx, &id, &ws.id, &bound.id, "mock", &id,
+                    None, None, Some("old window"), &now_utc()).unwrap();
+                storage::native_window_mark_closed(&tx, &id, &now_utc()).unwrap();
+            }
+            tx.commit().unwrap();
+            assert_eq!(storage::native_window_list_rows(&conn, &bound.id).unwrap().len(), 2001);
+        }
+        assert_eq!(service.liveness_snapshot(&bound.id).unwrap().windows.len(), 1);
+        assert!(!service.watchdog_reconcile_active_workspace().unwrap());
+        assert_eq!(service.liveness_snapshot(&bound.id).unwrap().windows.len(), 1);
+    }
 
     #[test]
     fn payload_has_workspace_id_and_no_hwnd() {
